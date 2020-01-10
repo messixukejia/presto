@@ -22,6 +22,7 @@ import javax.annotation.concurrent.Immutable;
 import java.util.List;
 import java.util.Map;
 
+// comment_xu：执行UNION操作的节点。
 @Immutable
 public final class UnionNode
         extends SetOperationNode

@@ -17,6 +17,7 @@ import org.antlr.v4.runtime.CharStream;
 import org.antlr.v4.runtime.IntStream;
 import org.antlr.v4.runtime.misc.Interval;
 
+//comment_xu：使输入的SQL语句大小写不敏感，忽略SQL语句关键字的大小写。例如，Select、select、SELECT等价。
 public class CaseInsensitiveStream
         implements CharStream
 {

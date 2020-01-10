@@ -26,6 +26,7 @@ import java.util.List;
 
 import static java.util.Objects.requireNonNull;
 
+// comment_xu：用于排序的节点。
 public class SortNode
         extends InternalPlanNode
 {

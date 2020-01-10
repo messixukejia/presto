@@ -253,6 +253,7 @@ public class SourcePartitionedScheduler
                 }
             }
 
+            // comment_xu：splitAssignment用于存储Node与Split的对应关系，格式为 Node->Set<Split>。
             Multimap<InternalNode, Split> splitAssignment = ImmutableMultimap.of();
             if (!scheduleGroup.pendingSplits.isEmpty()) {
                 if (!scheduleGroup.placementFuture.isDone()) {
@@ -293,6 +294,7 @@ public class SourcePartitionedScheduler
                 }
             }
 
+            // comment_xu: 用于在指定的NODE上启动Task或者更新指定Node上已存在的Task需要处理的splits。
             // assign the splits with successful placements
             overallNewTasks.addAll(assignSplits(splitAssignment, noMoreSplitsNotification));
 

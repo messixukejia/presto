@@ -566,6 +566,7 @@ class Query
         return Futures.transformAsync(queryManager.getStateChange(queryId, currentState), this::queryDoneFuture, directExecutor());
     }
 
+    //comment_xu：构造形如/v1/statement/queryid/token的restful请求
     private synchronized URI createNextResultsUri(String scheme, UriInfo uriInfo)
     {
         return uriInfo.getBaseUriBuilder()

@@ -112,6 +112,7 @@ import static com.google.common.collect.Streams.zip;
 import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 
+//comment_xu：负责整个SQL语句执行计划的生成，根据SQL语句的类型生成不同的执行计划；然后针对生成的执行计划，分别应用已注册的执行计划优化器进行优化。
 public class LogicalPlanner
 {
     public enum Stage
@@ -176,12 +177,14 @@ public class LogicalPlanner
         return plan(analysis, Stage.OPTIMIZED_AND_VALIDATED);
     }
 
+    //comment_xu：根据SQL语句的类型生成不同的执行计划，然后针对生成的执行计划分别使用已注册的计划优化器进行优化。
     public Plan plan(Analysis analysis, Stage stage)
     {
         PlanNode root = planStatement(analysis, analysis.getStatement());
 
         planSanityChecker.validateIntermediatePlan(root, session, metadata, sqlParser, variableAllocator.getTypes(), warningCollector);
 
+        //comment_xu：执行计划优化器
         if (stage.ordinal() >= Stage.OPTIMIZED.ordinal()) {
             for (PlanOptimizer optimizer : planOptimizers) {
                 root = optimizer.optimize(root, session, variableAllocator.getTypes(), variableAllocator, idAllocator, warningCollector);

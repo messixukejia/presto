@@ -79,6 +79,7 @@ import static com.google.common.collect.Sets.newConcurrentHashSet;
 import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 
+// comment_xu：对于每个Stage都会对应一个SqlStageExecution实例，SqlStageExecution承载了Stage的启动和任务的调度。
 @ThreadSafe
 public final class SqlStageExecution
 {

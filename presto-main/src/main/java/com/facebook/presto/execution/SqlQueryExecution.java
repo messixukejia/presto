@@ -194,6 +194,7 @@ public class SqlQueryExecution
                     metadata,
                     warningCollector);
 
+            // comment_xu：SQL语义分析
             // analyze query
             requireNonNull(preparedQuery, "preparedQuery is null");
             Analyzer analyzer = new Analyzer(
@@ -331,6 +332,7 @@ public class SqlQueryExecution
         return stateMachine.getCurrentRunningTaskCount();
     }
 
+    // comment_xu：SqlQueryExecution的启动方法。
     @Override
     public void start()
     {
@@ -425,6 +427,7 @@ public class SqlQueryExecution
         // time analysis phase
         stateMachine.beginAnalysis();
 
+        // comment_xu：根据语义分析结果生成查询计划
         // plan query
         PlanNodeIdAllocator idAllocator = new PlanNodeIdAllocator();
         LogicalPlanner logicalPlanner = new LogicalPlanner(false, stateMachine.getSession(), planOptimizers, idAllocator, metadata, sqlParser, statsCalculator, costCalculator, stateMachine.getWarningCollector());
@@ -439,6 +442,7 @@ public class SqlQueryExecution
         Optional<Output> output = new OutputExtractor().extractOutput(plan.getRoot());
         stateMachine.setOutput(output);
 
+        // comment_xu：进行执行计划分段
         // fragment the plan
         SubPlan fragmentedPlan = planFragmenter.createSubPlans(stateMachine.getSession(), plan, false, idAllocator, stateMachine.getWarningCollector());
 
@@ -465,6 +469,7 @@ public class SqlQueryExecution
         return connectors.build();
     }
 
+    // comment_xu：由plan构建task并进行分发调度计划，这个调度计划体现在SqlQueryScheduler上。
     private void planDistribution(PlanRoot plan)
     {
         CloseableSplitSourceProvider splitSourceProvider = new CloseableSplitSourceProvider(splitManager::getSplits);

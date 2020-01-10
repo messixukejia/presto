@@ -136,6 +136,7 @@ public class SqlParser
                 }
             });
 
+            //comment_xu：解析时的一些异常处理，详见PostProcessor。
             parser.addParseListener(new PostProcessor(Arrays.asList(parser.getRuleNames()), parsingOptions.getWarningConsumer()));
 
             lexer.removeErrorListeners();
@@ -165,6 +166,7 @@ public class SqlParser
                 tree = parseFunction.apply(parser);
             }
 
+            System.out.println(sql + " LISP-style tree is " + tree.toStringTree(parser)); // print LISP-style tree
             return new AstBuilder(parsingOptions).visit(tree);
         }
         catch (StackOverflowError e) {
@@ -172,6 +174,7 @@ public class SqlParser
         }
     }
 
+    //comment_xu：解析时的一些处理。
     private class PostProcessor
             extends SqlBaseBaseListener
     {
@@ -184,6 +187,7 @@ public class SqlParser
             this.warningConsumer = requireNonNull(warningConsumer, "warningConsumer is null");
         }
 
+        //comment_xu：未用引号括起来的标识符中有@或者:等符号，则抛出异常。
         @Override
         public void exitUnquotedIdentifier(SqlBaseParser.UnquotedIdentifierContext context)
         {
@@ -196,6 +200,7 @@ public class SqlParser
             }
         }
 
+        //comment_xu：标识符是用反引号`括起来的，则抛出异常。
         @Override
         public void exitBackQuotedIdentifier(SqlBaseParser.BackQuotedIdentifierContext context)
         {
@@ -207,6 +212,7 @@ public class SqlParser
                     token.getCharPositionInLine());
         }
 
+        //comment_xu：标识符是数字开头，则抛出异常。
         @Override
         public void exitDigitIdentifier(SqlBaseParser.DigitIdentifierContext context)
         {
@@ -218,6 +224,7 @@ public class SqlParser
                     token.getCharPositionInLine());
         }
 
+        //comment_xu：将非保留关键字替换成标识符。
         @Override
         public void exitNonReserved(SqlBaseParser.NonReservedContext context)
         {

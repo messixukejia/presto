@@ -27,6 +27,7 @@ import java.util.List;
 
 import static java.util.Objects.requireNonNull;
 
+// comment_xu：用于delete操作的节点。
 @Immutable
 public class DeleteNode
         extends InternalPlanNode

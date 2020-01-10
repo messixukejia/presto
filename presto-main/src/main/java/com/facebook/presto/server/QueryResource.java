@@ -42,6 +42,7 @@ import static java.util.Objects.requireNonNull;
 /**
  * Manage queries scheduled on this node
  */
+//comment_xu：与查询执行相关的RESTful请求，由该Resource处理。包括SQL语句的提交，获取查询执行的结果、取消查询。
 @Path("/v1/query")
 public class QueryResource
 {
@@ -66,6 +67,7 @@ public class QueryResource
         return builder.build();
     }
 
+    //comment_xu：获取一个查询执行的结果
     @GET
     @Path("{queryId}")
     public Response getQueryInfo(@PathParam("queryId") QueryId queryId)
@@ -81,6 +83,7 @@ public class QueryResource
         }
     }
 
+    //comment_xu：取消一个查询
     @DELETE
     @Path("{queryId}")
     public void cancelQuery(@PathParam("queryId") QueryId queryId)
@@ -129,6 +132,7 @@ public class QueryResource
         }
     }
 
+    //comment_xu：取消一个stage
     @DELETE
     @Path("stage/{stageId}")
     public void cancelStage(@PathParam("stageId") StageId stageId)

@@ -45,6 +45,7 @@ import static com.google.common.collect.ImmutableList.toImmutableList;
 import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 
+// comment_xu：执行Join操作的节点。
 @Immutable
 public class JoinNode
         extends InternalPlanNode

@@ -295,12 +295,14 @@ class StatementAnalyzer
         @Override
         protected Scope visitUse(Use node, Optional<Scope> scope)
         {
+            System.out.println("visitUse: " + node.toString());
             throw new SemanticException(NOT_SUPPORTED, node, "USE statement is not supported");
         }
 
         @Override
         protected Scope visitInsert(Insert insert, Optional<Scope> scope)
         {
+            System.out.println("visitInsert: " + insert.toString());
             QualifiedObjectName targetTable = createQualifiedObjectName(session, insert, insert.getTarget());
             if (metadata.getView(session, targetTable).isPresent()) {
                 throw new SemanticException(NOT_SUPPORTED, insert, "Inserting into views is not supported");
@@ -413,6 +415,7 @@ class StatementAnalyzer
         @Override
         protected Scope visitDelete(Delete node, Optional<Scope> scope)
         {
+            System.out.println("visitDelete: " + node.toString());
             Table table = node.getTable();
             QualifiedObjectName tableName = createQualifiedObjectName(session, table, table.getName());
             if (metadata.getView(session, tableName).isPresent()) {
@@ -442,6 +445,7 @@ class StatementAnalyzer
         @Override
         protected Scope visitAnalyze(Analyze node, Optional<Scope> scope)
         {
+            System.out.println("visitAnalyze: " + node.toString());
             analysis.setUpdateType("ANALYZE");
             QualifiedObjectName tableName = createQualifiedObjectName(session, node, node.getTableName());
 
@@ -485,6 +489,7 @@ class StatementAnalyzer
         @Override
         protected Scope visitCreateTableAsSelect(CreateTableAsSelect node, Optional<Scope> scope)
         {
+            System.out.println("visitCreateTableAsSelect: " + node.toString());
             analysis.setUpdateType("CREATE TABLE");
 
             // turn this into a query that has a new table writer node on top.
@@ -533,6 +538,7 @@ class StatementAnalyzer
         @Override
         protected Scope visitCreateView(CreateView node, Optional<Scope> scope)
         {
+            System.out.println("visitCreateView: " + node.toString());
             analysis.setUpdateType("CREATE VIEW");
 
             QualifiedObjectName viewName = createQualifiedObjectName(session, node, node.getName());
@@ -552,6 +558,7 @@ class StatementAnalyzer
         @Override
         protected Scope visitCreateFunction(CreateFunction node, Optional<Scope> scope)
         {
+            System.out.println("visitCreateFunction: " + node.toString());
             analysis.setUpdateType("CREATE FUNCTION");
 
             // Check function name
@@ -594,6 +601,7 @@ class StatementAnalyzer
         @Override
         protected Scope visitDropFunction(DropFunction node, Optional<Scope> scope)
         {
+            System.out.println("visitDropFunction: " + node.toString());
             checkFunctionName(node, node.getFunctionName());
             return createAndAssignScope(node, scope);
         }
@@ -601,24 +609,28 @@ class StatementAnalyzer
         @Override
         protected Scope visitSetSession(SetSession node, Optional<Scope> scope)
         {
+            System.out.println("visitSetSession: " + node.toString());
             return createAndAssignScope(node, scope);
         }
 
         @Override
         protected Scope visitResetSession(ResetSession node, Optional<Scope> scope)
         {
+            System.out.println("visitResetSession: " + node.toString());
             return createAndAssignScope(node, scope);
         }
 
         @Override
         protected Scope visitAddColumn(AddColumn node, Optional<Scope> scope)
         {
+            System.out.println("visitAddColumn: " + node.toString());
             return createAndAssignScope(node, scope);
         }
 
         @Override
         protected Scope visitCreateSchema(CreateSchema node, Optional<Scope> scope)
         {
+            System.out.println("visitCreateSchema: " + node.toString());
             validateProperties(node.getProperties(), scope);
             return createAndAssignScope(node, scope);
         }
@@ -626,18 +638,21 @@ class StatementAnalyzer
         @Override
         protected Scope visitDropSchema(DropSchema node, Optional<Scope> scope)
         {
+            System.out.println("visitDropSchema: " + node.toString());
             return createAndAssignScope(node, scope);
         }
 
         @Override
         protected Scope visitRenameSchema(RenameSchema node, Optional<Scope> scope)
         {
+            System.out.println("visitRenameSchema: " + node.toString());
             return createAndAssignScope(node, scope);
         }
 
         @Override
         protected Scope visitCreateTable(CreateTable node, Optional<Scope> scope)
         {
+            System.out.println("visitCreateTable: " + node.toString());
             validateProperties(node.getProperties(), scope);
             return createAndAssignScope(node, scope);
         }
@@ -645,6 +660,7 @@ class StatementAnalyzer
         @Override
         protected Scope visitProperty(Property node, Optional<Scope> scope)
         {
+            System.out.println("visitProperty: " + node.toString());
             // Property value expressions must be constant
             createConstantAnalyzer(metadata, session, analysis.getParameters(), WarningCollector.NOOP, analysis.isDescribe())
                     .analyze(node.getValue(), createScope(scope));
@@ -654,84 +670,99 @@ class StatementAnalyzer
         @Override
         protected Scope visitDropTable(DropTable node, Optional<Scope> scope)
         {
+            System.out.println("visitDropTable: " + node.toString());
             return createAndAssignScope(node, scope);
         }
 
         @Override
         protected Scope visitRenameTable(RenameTable node, Optional<Scope> scope)
         {
+            System.out.println("visitRenameTable: " + node.toString());
             return createAndAssignScope(node, scope);
         }
 
         @Override
         protected Scope visitRenameColumn(RenameColumn node, Optional<Scope> scope)
         {
+            System.out.println("visitRenameColumn: " + node.toString());
             return createAndAssignScope(node, scope);
         }
 
         @Override
         protected Scope visitDropColumn(DropColumn node, Optional<Scope> scope)
         {
+            System.out.println("visitDropColumn: " + node.toString());
             return createAndAssignScope(node, scope);
         }
 
         @Override
         protected Scope visitDropView(DropView node, Optional<Scope> scope)
         {
+            System.out.println("visitDropView: " + node.toString());
             return createAndAssignScope(node, scope);
         }
 
         @Override
         protected Scope visitStartTransaction(StartTransaction node, Optional<Scope> scope)
         {
+            System.out.println("visitStartTransaction: " + node.toString());
             return createAndAssignScope(node, scope);
         }
 
         @Override
         protected Scope visitCommit(Commit node, Optional<Scope> scope)
         {
+
+            System.out.println("visitCommit: " + node.toString());
             return createAndAssignScope(node, scope);
         }
 
         @Override
         protected Scope visitRollback(Rollback node, Optional<Scope> scope)
         {
+            System.out.println("visitRollback: " + node.toString());
             return createAndAssignScope(node, scope);
         }
 
         @Override
         protected Scope visitPrepare(Prepare node, Optional<Scope> scope)
         {
+            System.out.println("visitPrepare: " + node.toString());
             return createAndAssignScope(node, scope);
         }
 
         @Override
         protected Scope visitDeallocate(Deallocate node, Optional<Scope> scope)
         {
+            System.out.println("visitDeallocate: " + node.toString());
             return createAndAssignScope(node, scope);
         }
 
         @Override
         protected Scope visitExecute(Execute node, Optional<Scope> scope)
         {
+            System.out.println("visitExecute: " + node.toString());
             return createAndAssignScope(node, scope);
         }
 
         @Override
         protected Scope visitGrant(Grant node, Optional<Scope> scope)
         {
+            System.out.println("visitGrant: " + node.toString());
             return createAndAssignScope(node, scope);
         }
 
         @Override
         protected Scope visitRevoke(Revoke node, Optional<Scope> scope)
         {
+            System.out.println("visitRevoke: " + node.toString());
             return createAndAssignScope(node, scope);
         }
 
         @Override
         protected Scope visitCall(Call node, Optional<Scope> scope)
         {
+            System.out.println("visitCall: " + node.toString());
             return createAndAssignScope(node, scope);
         }
 
@@ -802,6 +833,7 @@ class StatementAnalyzer
         @Override
         protected Scope visitQuery(Query node, Optional<Scope> scope)
         {
+            System.out.println("visitQuery: " + node.toString());
             Scope withScope = analyzeWith(node, scope);
             Scope queryBodyScope = process(node.getQueryBody(), withScope);
             if (node.getOrderBy().isPresent()) {
@@ -826,6 +858,7 @@ class StatementAnalyzer
         @Override
         protected Scope visitUnnest(Unnest node, Optional<Scope> scope)
         {
+            System.out.println("visitUnnest: " + node.toString());
             ImmutableList.Builder<Field> outputFields = ImmutableList.builder();
             for (Expression expression : node.getExpressions()) {
                 ExpressionAnalysis expressionAnalysis = analyzeExpression(expression, createScope(scope));
@@ -858,6 +891,7 @@ class StatementAnalyzer
         @Override
         protected Scope visitLateral(Lateral node, Optional<Scope> scope)
         {
+            System.out.println("visitLateral: " + node.toString());
             StatementAnalyzer analyzer = new StatementAnalyzer(analysis, metadata, sqlParser, accessControl, session, WarningCollector.NOOP);
             Scope queryScope = analyzer.analyze(node.getQuery(), scope);
             return createAndAssignScope(node, scope, queryScope.getRelationType());
@@ -866,6 +900,7 @@ class StatementAnalyzer
         @Override
         protected Scope visitTable(Table table, Optional<Scope> scope)
         {
+            System.out.println("visitTable: " + table.toString());
             if (!table.getName().getPrefix().isPresent()) {
                 // is this a reference to a WITH query?
                 String name = table.getName().getSuffix();
@@ -1011,6 +1046,7 @@ class StatementAnalyzer
         @Override
         protected Scope visitAliasedRelation(AliasedRelation relation, Optional<Scope> scope)
         {
+            System.out.println("visitAliasedRelation: " + relation.toString());
             Scope relationScope = process(relation.getRelation(), scope);
 
             // todo this check should be inside of TupleDescriptor.withAlias, but the exception needs the node object
@@ -1037,6 +1073,7 @@ class StatementAnalyzer
         @Override
         protected Scope visitSampledRelation(SampledRelation relation, Optional<Scope> scope)
         {
+            System.out.println("visitSampledRelation: " + relation.toString());
             if (!VariablesExtractor.extractNames(relation.getSamplePercentage(), analysis.getColumnReferences()).isEmpty()) {
                 throw new SemanticException(NON_NUMERIC_SAMPLE_PERCENTAGE, relation.getSamplePercentage(), "Sample percentage cannot contain column references");
             }
@@ -1077,6 +1114,7 @@ class StatementAnalyzer
         @Override
         protected Scope visitTableSubquery(TableSubquery node, Optional<Scope> scope)
         {
+            System.out.println("visitTableSubquery: " + node.toString());
             StatementAnalyzer analyzer = new StatementAnalyzer(analysis, metadata, sqlParser, accessControl, session, WarningCollector.NOOP);
             Scope queryScope = analyzer.analyze(node.getQuery(), scope);
             return createAndAssignScope(node, scope, queryScope.getRelationType());
@@ -1085,6 +1123,7 @@ class StatementAnalyzer
         @Override
         protected Scope visitQuerySpecification(QuerySpecification node, Optional<Scope> scope)
         {
+            System.out.println("visitQuerySpecification: " + node.toString());
             // TODO: extract candidate names from SELECT, WHERE, HAVING, GROUP BY and ORDER BY expressions
             // to pass down to analyzeFrom
 
@@ -1140,6 +1179,7 @@ class StatementAnalyzer
         @Override
         protected Scope visitSetOperation(SetOperation node, Optional<Scope> scope)
         {
+            System.out.println("visitSetOperation: " + node.toString());
             checkState(node.getRelations().size() >= 2);
 
             List<Scope> relationScopes = node.getRelations().stream()
@@ -1216,6 +1256,7 @@ class StatementAnalyzer
         @Override
         protected Scope visitIntersect(Intersect node, Optional<Scope> scope)
         {
+            System.out.println("visitIntersect: " + node.toString());
             if (!node.isDistinct()) {
                 throw new SemanticException(NOT_SUPPORTED, node, "INTERSECT ALL not yet implemented");
             }
@@ -1226,6 +1267,7 @@ class StatementAnalyzer
         @Override
         protected Scope visitExcept(Except node, Optional<Scope> scope)
         {
+            System.out.println("visitExcept: " + node.toString());
             if (!node.isDistinct()) {
                 throw new SemanticException(NOT_SUPPORTED, node, "EXCEPT ALL not yet implemented");
             }
@@ -1236,6 +1278,7 @@ class StatementAnalyzer
         @Override
         protected Scope visitJoin(Join node, Optional<Scope> scope)
         {
+            System.out.println("visitJoin: " + node.toString());
             JoinCriteria criteria = node.getCriteria().orElse(null);
             if (criteria instanceof NaturalJoin) {
                 throw new SemanticException(NOT_SUPPORTED, node, "Natural join not supported");
@@ -1355,6 +1398,7 @@ class StatementAnalyzer
         @Override
         protected Scope visitValues(Values node, Optional<Scope> scope)
         {
+            System.out.println("visitValues: " + node.toString());
             checkState(node.getRows().size() >= 1);
 
             List<List<Type>> rowTypes = node.getRows().stream()

@@ -122,6 +122,7 @@ class StatementClientV1
         this.requestTimeoutNanos = session.getClientRequestTimeout();
         this.user = session.getUser();
 
+        //comment_xu：向Coordinatro发送RESTful请求。
         Request request = buildQueryRequest(session, query);
 
         JsonResponse<QueryResults> response = JsonResponse.execute(QUERY_RESULTS_CODEC, httpClient, request);
@@ -130,11 +131,14 @@ class StatementClientV1
             throw requestFailedException("starting query", request, response);
         }
 
+        //comment_xu：处理返回结果
         processResponse(response.getHeaders(), response.getValue());
     }
 
     private Request buildQueryRequest(ClientSession session, String query)
     {
+        //comment_xu：生成POST类型到RESTful请求，IP:端口/v1/statement
+        //comment_xu：session.getServer值为cli启动参数--server指定的值。
         HttpUrl url = HttpUrl.get(session.getServer());
         if (url == null) {
             throw new ClientException("Invalid server URL: " + session.getServer());
@@ -319,6 +323,7 @@ class StatementClientV1
                 .url(url);
     }
 
+    //comment_xu：该方法使用coordinator返回的nextResultUri，向coordinator继续发送请求，以便分批获得查询结果
     @Override
     public boolean advance()
     {
@@ -326,7 +331,9 @@ class StatementClientV1
             return false;
         }
 
+        //comment_xu：获得请求下一批结果的Uri（coordinator生成，并返回给client），该Uri内容为：/v1/statement/queryID/token。
         URI nextUri = currentStatusInfo().getNextUri();
+        //comment_xu：所有结果已返回，则nextUri为null，需要将client状态置为finish。
         if (nextUri == null) {
             state.compareAndSet(State.RUNNING, State.FINISHED);
             return false;
@@ -367,6 +374,7 @@ class StatementClientV1
             }
             attempts++;
 
+            //comment_xu：生成查询结果
             JsonResponse<QueryResults> response;
             try {
                 response = JsonResponse.execute(QUERY_RESULTS_CODEC, httpClient, request);
@@ -388,6 +396,7 @@ class StatementClientV1
         }
     }
 
+    //comment_xu：将返回结果，存储到currentResults中。
     private void processResponse(Headers headers, QueryResults results)
     {
         setCatalog.set(headers.get(PRESTO_SET_CATALOG));

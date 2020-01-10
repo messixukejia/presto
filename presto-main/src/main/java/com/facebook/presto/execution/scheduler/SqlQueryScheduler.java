@@ -122,6 +122,7 @@ import static java.util.function.Function.identity;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toSet;
 
+// comment_xu：SqlQueryScheduler
 public class SqlQueryScheduler
 {
     private final QueryStateMachine queryStateMachine;

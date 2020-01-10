@@ -66,6 +66,11 @@ import static com.facebook.presto.server.PrestoSystemRequirements.verifySystemTi
 import static com.google.common.base.Strings.nullToEmpty;
 import static java.util.Objects.requireNonNull;
 
+//Main Class: com.facebook.presto.server.PrestoServer
+//VM Options: -ea -XX:+UseG1GC -XX:G1HeapRegionSize=32M -XX:+UseGCOverheadLimit -XX:+ExplicitGCInvokesConcurrent -Xmx2G
+//            -Dconfig=etc/config.properties -Dlog.levels-file=etc/log.properties
+//Working directory: $MODULE_DIR$
+//Use classpath of module: presto-main
 public class PrestoServer
         implements Runnable
 {

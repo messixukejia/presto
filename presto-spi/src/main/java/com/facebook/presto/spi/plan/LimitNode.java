@@ -28,6 +28,7 @@ import static com.facebook.presto.spi.StandardErrorCode.INVALID_FUNCTION_ARGUMEN
 import static java.util.Collections.singletonList;
 import static java.util.Objects.requireNonNull;
 
+// comment_xu：用于执行limit操作的节点。
 @Immutable
 public final class LimitNode
         extends PlanNode

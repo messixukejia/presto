@@ -25,6 +25,7 @@ import com.google.common.collect.ImmutableSet;
 import io.airlift.units.Duration;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
+import okhttp3.mockwebserver.RecordedRequest;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
@@ -71,15 +72,15 @@ public class TestQueryRunner
             throws SQLException, InterruptedException
     {
         server.enqueue(new MockResponse()
-                .setResponseCode(307)
+                .setResponseCode(307) //重定向，客户端会再次发起请求。
                 .addHeader(LOCATION, server.url("/v1/statement"))
                 .addHeader(SET_COOKIE, "a=apple"));
         server.enqueue(new MockResponse()
                 .addHeader(CONTENT_TYPE, "application/json")
-                .setBody(createResults()));
+                .setBody(createResults("22222")));
         server.enqueue(new MockResponse()
                 .addHeader(CONTENT_TYPE, "application/json")
-                .setBody(createResults()));
+                .setBody(createResults("33333")));
 
         QueryRunner queryRunner = createQueryRunner(
                 new ClientSession(
@@ -101,17 +102,26 @@ public class TestQueryRunner
                         null,
                         new Duration(2, MINUTES)));
         try (Query query = queryRunner.startQuery("first query will introduce a cookie")) {
-            query.renderOutput(new PrintStream(nullOutputStream()), CSV, false);
+            query.renderOutput(System.out, CSV, false); //22222
         }
         try (Query query = queryRunner.startQuery("second query should carry the cookie")) {
-            query.renderOutput(new PrintStream(nullOutputStream()), CSV, false);
+            query.renderOutput(System.out, CSV, false); //33333
         }
-        assertEquals(server.takeRequest().getHeader("Cookie"), null);
-        assertEquals(server.takeRequest().getHeader("Cookie"), "a=apple");
-        assertEquals(server.takeRequest().getHeader("Cookie"), "a=apple");
+
+        RecordedRequest record_req = server.takeRequest();
+        assertEquals(record_req.getHeader("Cookie"), null);
+        assertEquals(record_req.getBody().toString(), "[text=first query will introduce a cookie]");
+
+        record_req = server.takeRequest();
+        assertEquals(record_req.getHeader("Cookie"), "a=apple");
+        assertEquals(record_req.getBody().toString(), "[text=first query will introduce a cookie]");
+
+        record_req = server.takeRequest();
+        assertEquals(record_req.getHeader("Cookie"), "a=apple");
+        assertEquals(record_req.getBody().toString(), "[text=second query should carry the cookie]");
     }
 
-    private String createResults()
+    private String createResults(String data)
     {
         QueryResults queryResults = new QueryResults(
                 "20160128_214710_00012_rk68b",
@@ -119,7 +129,7 @@ public class TestQueryRunner
                 null,
                 null,
                 ImmutableList.of(new Column("_col0", BigintType.BIGINT)),
-                ImmutableList.of(ImmutableList.of(123)),
+                ImmutableList.of(ImmutableList.of(data)),
                 StatementStats.builder().setState("FINISHED").build(),
                 //new StatementStats("FINISHED", false, true, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, null),
                 null,

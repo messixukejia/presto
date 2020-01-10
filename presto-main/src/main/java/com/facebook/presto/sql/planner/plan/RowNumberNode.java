@@ -28,6 +28,7 @@ import java.util.Optional;
 
 import static java.util.Objects.requireNonNull;
 
+// comment_xu：用于处理窗口函数row_number。
 @Immutable
 public final class RowNumberNode
         extends InternalPlanNode

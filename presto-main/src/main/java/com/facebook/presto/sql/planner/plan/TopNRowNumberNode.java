@@ -31,6 +31,10 @@ import java.util.Optional;
 import static com.google.common.base.Preconditions.checkArgument;
 import static java.util.Objects.requireNonNull;
 
+// comment_xu：用于处理窗口函数row_number中排序的前n条数据。
+// 例如： "SELECT x from (SELECT x, row_number() OVER (ORDER BY x) rn FROM ...) where rn < 11;"
+// 子查询用于取x，以及按x升序排列的行号；最后取出行号小于11的x。
+// presto 会选用TopNRowNumberNode来选取行号小于11的x。
 @Immutable
 public final class TopNRowNumberNode
         extends InternalPlanNode

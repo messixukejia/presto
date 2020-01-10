@@ -28,6 +28,7 @@ import java.util.List;
 
 import static java.util.Objects.requireNonNull;
 
+// comment_xu：用于输出最终结果的节点。
 @Immutable
 public class OutputNode
         extends InternalPlanNode

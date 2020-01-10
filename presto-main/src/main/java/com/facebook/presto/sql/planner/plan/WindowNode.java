@@ -38,6 +38,7 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.collect.ImmutableList.toImmutableList;
 import static java.util.Objects.requireNonNull;
 
+// comment_xu：用于处理窗口函数。
 @Immutable
 public class WindowNode
         extends InternalPlanNode

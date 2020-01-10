@@ -142,11 +142,13 @@ import com.facebook.presto.sql.tree.WithQuery;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
+import org.antlr.v4.runtime.CharStreams;
 import org.testng.annotations.Test;
 
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+import java.util.regex.Pattern;
 
 import static com.facebook.presto.sql.QueryUtil.identifier;
 import static com.facebook.presto.sql.QueryUtil.query;
@@ -188,7 +190,31 @@ public class TestSqlParser
     @Test
     public void testPosition()
     {
-        assertExpression("position('a' in 'b')",
+        // position('a' in 'b') LISP-style tree is
+        // (standaloneExpression
+        //      (expression
+        //         (booleanExpression
+        //              (valueExpression
+        //                  (primaryExpression position
+        //                       (
+        //                          (valueExpression (primaryExpression (string 'a')))
+        //                          in (valueExpression (primaryExpression (string 'b')))
+        //                        )
+        //                   )
+        //               )
+        //          )
+        //      )
+        // <EOF>)
+
+        Expression exp = new FunctionCall(QualifiedName.of("strpos"), ImmutableList.of(
+                new StringLiteral("b"),
+                new StringLiteral("a")));
+        System.out.println(exp.toString());
+
+        Expression out_exp = SQL_PARSER.createExpression("position('a' in 'b')");
+        System.out.println(out_exp.toString());
+
+        /*assertExpression("position('a' in 'b')",
                 new FunctionCall(QualifiedName.of("strpos"), ImmutableList.of(
                         new StringLiteral("b"),
                         new StringLiteral("a"))));
@@ -196,32 +222,50 @@ public class TestSqlParser
         assertExpression("position('a' in ('b'))",
                 new FunctionCall(QualifiedName.of("strpos"), ImmutableList.of(
                         new StringLiteral("b"),
-                        new StringLiteral("a"))));
+                        new StringLiteral("a"))));*/
     }
 
     @Test
     public void testPossibleExponentialBacktracking()
     {
-        SQL_PARSER.createExpression("(((((((((((((((((((((((((((true)))))))))))))))))))))))))))");
+        // ((((true)))) LISP-style tree is
+        // (standaloneExpression
+        //      (expression (booleanExpression (valueExpression (primaryExpression
+        //          (
+        //              (expression (booleanExpression (valueExpression (primaryExpression
+        //                  (
+        //                      (expression (booleanExpression (valueExpression (primaryExpression
+        //                          (
+        //                              (expression (booleanExpression (valueExpression (primaryExpression
+        //                                  (
+        //                                      (expression (booleanExpression (valueExpression (primaryExpression
+        //                                          (booleanValue true)
+        //                                       ))))
+        //                                  )
+        //                               ))))
+        //                          )
+        //                       ))))
+        //                   )
+        //               ))))
+        //           )
+        //       ))))
+        // <EOF>)
+        Expression exp = SQL_PARSER.createExpression("((((true))))");
+        System.out.println(exp.toString());
     }
 
     @Test(timeOut = 2_000)
     public void testPotentialUnboundedLookahead()
     {
-        SQL_PARSER.createExpression("(\n" +
+        // (1 * -1 + 1 * -2 + 1 * -3 + 1 * -4)
+        Expression exp = SQL_PARSER.createExpression("(\n" +
                 "      1 * -1 +\n" +
                 "      1 * -2 +\n" +
                 "      1 * -3 +\n" +
-                "      1 * -4 +\n" +
-                "      1 * -5 +\n" +
-                "      1 * -6 +\n" +
-                "      1 * -7 +\n" +
-                "      1 * -8 +\n" +
-                "      1 * -9 +\n" +
-                "      1 * -10 +\n" +
-                "      1 * -11 +\n" +
-                "      1 * -12 \n" +
+                "      1 * -4 \n" +
                 ")\n");
+
+        System.out.println(exp.toString());
     }
 
     @Test
@@ -239,6 +283,7 @@ public class TestSqlParser
     @Test
     public void testGenericLiteral()
     {
+        // 通过visitTypeConstructor生成GenericLiteral。
         assertGenericLiteral("VARCHAR");
         assertGenericLiteral("BIGINT");
         assertGenericLiteral("DOUBLE");
@@ -248,8 +293,21 @@ public class TestSqlParser
     }
 
     @Test
+    public void testPersonalTest()
+    {
+        String val = "1''11";
+        System.out.println(val.replace("''", "'"));
+
+        Pattern WHITESPACE_PATTERN = Pattern.compile("[ \\r\\n\\t]");
+        val = "x 1\n2";
+        String hexString = WHITESPACE_PATTERN.matcher(val).replaceAll("").toUpperCase();
+        System.out.println(hexString);
+    }
+
+    @Test
     public void testBinaryLiteral()
     {
+        //通过visitBinaryLiteral生成BinaryLiteral
         assertExpression("x' '", new BinaryLiteral(""));
         assertExpression("x''", new BinaryLiteral(""));
         assertExpression("X'abcdef1234567890ABCDEF'", new BinaryLiteral("abcdef1234567890ABCDEF"));
@@ -287,6 +345,9 @@ public class TestSqlParser
         assertExpression("ARRAY ['hi', 'hello']", new ArrayConstructor(ImmutableList.of(new StringLiteral("hi"), new StringLiteral("hello"))));
     }
 
+    // 下标测试
+    // primaryExpression
+    // | value=primaryExpression '[' index=valueExpression ']'                               #subscript
     @Test
     public void testArraySubscript()
     {
@@ -388,6 +449,7 @@ public class TestSqlParser
         assertCast("interval year to month", "INTERVAL YEAR TO MONTH");
     }
 
+    // 符号通过visitArithmeticUnary生成，数字通过visitIntegerLiteral生成
     @Test
     public void testArithmeticUnary()
     {
@@ -551,6 +613,8 @@ public class TestSqlParser
                 simpleQuery(
                         selectList(new AllColumns()),
                         subquery(valuesQuery)));
+
+        System.out.println("out=" + SQL_PARSER.createStatement("SELECT * FROM (VALUES ('a', 1, 2.2e0), ('b', 2, 3.3e0))").toString());
     }
 
     @Test

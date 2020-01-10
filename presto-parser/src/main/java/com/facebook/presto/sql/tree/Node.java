@@ -18,6 +18,7 @@ import java.util.Optional;
 
 import static java.util.Objects.requireNonNull;
 
+//comment_xu：查询语句经过语法与词法分析后，会生成抽象语法树(AST)，语法树的每个节点都是一个node（node是sql语句的一部分，例如select部分、where部分、group by部分）
 public abstract class Node
 {
     private final Optional<NodeLocation> location;

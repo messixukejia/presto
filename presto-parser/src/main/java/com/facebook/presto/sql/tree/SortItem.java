@@ -21,6 +21,7 @@ import java.util.Optional;
 
 import static com.google.common.base.MoreObjects.toStringHelper;
 
+//comment_xu：排序的某一列及类型。
 public class SortItem
         extends Node
 {
@@ -34,9 +35,9 @@ public class SortItem
         FIRST, LAST, UNDEFINED
     }
 
-    private final Expression sortKey;
-    private final Ordering ordering;
-    private final NullOrdering nullOrdering;
+    private final Expression sortKey; //排序的列或者表达式。
+    private final Ordering ordering;  //排序类型，升序或降序。
+    private final NullOrdering nullOrdering; //排序后null的位置，fisrt、last分别表示在排序后null值放在非null值的前面或者后面。
 
     public SortItem(Expression sortKey, Ordering ordering, NullOrdering nullOrdering)
     {

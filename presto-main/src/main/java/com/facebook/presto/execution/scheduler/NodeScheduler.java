@@ -57,17 +57,20 @@ import static java.util.Objects.requireNonNull;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
+// comment_xu：将task分配给node的核心模块。
+// NodeSchedulerConfig配置了调度的相关参数。
+// NodeSelector 提供了各个stage中task分配node的算法。
 public class NodeScheduler
 {
     private final NetworkLocationCache networkLocationCache;
     private final List<CounterStat> topologicalSplitCounters;
     private final List<String> networkLocationSegmentNames;
-    private final InternalNodeManager nodeManager;
+    private final InternalNodeManager nodeManager; //comment_xu：从nodeManager中获取存活的node，然后存入 nodemap，并定期更新其中的内容，时长5s。
     private final int minCandidates;
     private final boolean includeCoordinator;
     private final int maxSplitsPerNode;
     private final int maxPendingSplitsPerTask;
-    private final NodeTaskMap nodeTaskMap;
+    private final NodeTaskMap nodeTaskMap; //comment_xu：保存了当前stage分配的 TASK 和 node 的映射列表。
     private final boolean useNetworkTopology;
     private final Duration nodeMapRefreshInterval;
 

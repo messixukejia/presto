@@ -162,6 +162,7 @@ public class DataDefinitionExecution<T extends Statement>
         return stateMachine.getCurrentRunningTaskCount();
     }
 
+    // comment_xu：DataDefinitionExecution的启动方法，直接调用与其绑定的DataDefinitionTask的execute方法。
     @Override
     public void start()
     {

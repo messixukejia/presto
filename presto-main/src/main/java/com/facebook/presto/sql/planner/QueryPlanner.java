@@ -100,6 +100,7 @@ import static com.google.common.collect.ImmutableSet.toImmutableSet;
 import static com.google.common.collect.Streams.stream;
 import static java.util.Objects.requireNonNull;
 
+//comment_xu：用于处理QUERY和QuerySpecification。
 class QueryPlanner
 {
     private final Analysis analysis;

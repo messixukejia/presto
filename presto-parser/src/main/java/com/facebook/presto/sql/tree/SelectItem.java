@@ -15,6 +15,7 @@ package com.facebook.presto.sql.tree;
 
 import java.util.Optional;
 
+//comment_xu：select语句的列类型，AllColumns表示所有列，SingleColumn表示单一列。
 public abstract class SelectItem
         extends Node
 {

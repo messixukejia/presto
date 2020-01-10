@@ -40,6 +40,8 @@ import static java.util.Collections.unmodifiableMap;
 import static java.util.Collections.unmodifiableSet;
 import static java.util.Objects.requireNonNull;
 
+// comment_xu：AggregationNode是用于聚合操作的节点，聚合操作类型有FINAL、PARTIAL、SINGLE三种，分别为最终聚合、局部聚合和单点聚合。
+// 其中执行计划在进行优化之前，聚合类型都是单点聚合；在执行计划优化器中会对齐进行拆分为局部聚合和最终聚合。
 @Immutable
 public final class AggregationNode
         extends PlanNode

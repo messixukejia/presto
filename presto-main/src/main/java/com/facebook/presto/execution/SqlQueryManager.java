@@ -122,6 +122,7 @@ public class SqlQueryManager
 
     private final ClusterSizeMonitor clusterSizeMonitor;
 
+    // comment_xu: 存储statement 到 QueryExecutionFactory 的映射关系
     private final Map<Class<? extends Statement>, QueryExecutionFactory<?>> executionFactories;
 
     private final SqlQueryManagerStats stats = new SqlQueryManagerStats();
@@ -358,6 +359,7 @@ public class SqlQueryManager
             transactionManager.activateTransaction(session, isTransactionControlStatement(preparedQuery.getStatement()), accessControl);
 
             // create query execution
+            // comment_xu：通过CoordinatorModule.java获取注入。
             QueryExecutionFactory<?> queryExecutionFactory = executionFactories.get(preparedQuery.getStatement().getClass());
             if (queryExecutionFactory == null) {
                 throw new PrestoException(NOT_SUPPORTED, "Unsupported statement type: " + preparedQuery.getStatement().getClass().getSimpleName());

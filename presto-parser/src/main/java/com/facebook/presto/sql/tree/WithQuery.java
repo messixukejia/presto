@@ -22,12 +22,13 @@ import java.util.Optional;
 import static com.google.common.base.MoreObjects.toStringHelper;
 import static java.util.Objects.requireNonNull;
 
+//comment_xu：表示一个with语句。
 public class WithQuery
         extends Node
 {
-    private final Identifier name;
-    private final Query query;
-    private final Optional<List<Identifier>> columnNames;
+    private final Identifier name; //with语句的别名
+    private final Query query;   //with所关联的查询语句
+    private final Optional<List<Identifier>> columnNames; //with语句中的列名
 
     public WithQuery(Identifier name, Query query, Optional<List<Identifier>> columnNames)
     {

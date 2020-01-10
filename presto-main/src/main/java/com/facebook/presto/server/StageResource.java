@@ -23,6 +23,7 @@ import javax.ws.rs.PathParam;
 
 import static java.util.Objects.requireNonNull;
 
+//comment_xu：处理与stage相关的RESTful请求。
 @Path("/v1/stage")
 public class StageResource
 {
@@ -34,6 +35,7 @@ public class StageResource
         this.queryManager = requireNonNull(queryManager, "queryManager is null");
     }
 
+    //comment_xu：取消一个stage。
     @DELETE
     @Path("{stageId}")
     public void cancelStage(@PathParam("stageId") StageId stageId)

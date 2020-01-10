@@ -29,6 +29,7 @@ import java.util.Optional;
 import static com.google.common.base.Preconditions.checkArgument;
 import static java.util.Objects.requireNonNull;
 
+// comment_xu：类似于ExchangeNode，用于分布式执行计划中不同stage间的数据交换。
 @Immutable
 public class RemoteSourceNode
         extends InternalPlanNode

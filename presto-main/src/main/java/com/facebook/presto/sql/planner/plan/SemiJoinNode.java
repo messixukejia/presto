@@ -28,6 +28,7 @@ import java.util.Optional;
 import static com.google.common.base.Preconditions.checkArgument;
 import static java.util.Objects.requireNonNull;
 
+// comment_xu：用于处理执行计划生成过程中产生的semijoin。
 @Immutable
 public class SemiJoinNode
         extends InternalPlanNode

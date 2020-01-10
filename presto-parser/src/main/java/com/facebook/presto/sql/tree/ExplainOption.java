@@ -15,6 +15,7 @@ package com.facebook.presto.sql.tree;
 
 import java.util.Optional;
 
+//comment_xu：Explain语句的可选参数，有ExplainFormat、ExplainType两个子句。
 public abstract class ExplainOption
         extends Node
 {

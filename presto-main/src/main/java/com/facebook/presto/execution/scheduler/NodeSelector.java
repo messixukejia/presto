@@ -21,6 +21,7 @@ import com.google.common.collect.ImmutableSet;
 import java.util.List;
 import java.util.Set;
 
+// comment_xu：NodeSelector 提供了各个stage中task分配node的算法。
 public interface NodeSelector
 {
     void lockDownNodes();

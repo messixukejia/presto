@@ -29,6 +29,8 @@ import static java.lang.String.format;
 import static java.util.Collections.singletonList;
 import static java.util.Objects.requireNonNull;
 
+// comment_xu：用于获取数据排序后的前n条数据，使用topn算法，而不是整体排序后再取。
+// 例如，"SELECT l_orderkey FROM xx ORDER BY l_orderkey limit 10" 获取l_orderkey最小的前10条数据。
 @Immutable
 public final class TopNNode
         extends PlanNode

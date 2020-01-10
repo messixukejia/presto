@@ -29,10 +29,12 @@ import java.util.function.IntConsumer;
 import static com.google.common.base.MoreObjects.toStringHelper;
 import static java.util.Objects.requireNonNull;
 
+//comment_xu：保存了当前stage分配的 TASK 和 node 的映射列表。
 @ThreadSafe
 public class NodeTaskMap
 {
     private static final Logger log = Logger.get(NodeTaskMap.class);
+    // comment_xu：维护了一个node对应的task列表，并会对每个task注册监听器，保证task完成后能够移除。
     private final ConcurrentHashMap<InternalNode, NodeTasks> nodeTasksMap = new ConcurrentHashMap<>();
     private final FinalizerService finalizerService;
 

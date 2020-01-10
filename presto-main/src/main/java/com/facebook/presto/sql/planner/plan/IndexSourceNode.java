@@ -33,6 +33,7 @@ import java.util.Set;
 import static com.google.common.base.Preconditions.checkArgument;
 import static java.util.Objects.requireNonNull;
 
+// comment_xu：与index join配合使用的，执行数据源读取操作的节点。
 public class IndexSourceNode
         extends InternalPlanNode
 {

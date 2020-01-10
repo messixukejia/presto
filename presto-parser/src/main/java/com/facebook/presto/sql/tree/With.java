@@ -23,11 +23,12 @@ import static com.google.common.base.MoreObjects.toStringHelper;
 import static com.google.common.base.Preconditions.checkArgument;
 import static java.util.Objects.requireNonNull;
 
+//comment_xu：查询中所有的with语句。
 public class With
         extends Node
 {
-    private final boolean recursive;
-    private final List<WithQuery> queries;
+    private final boolean recursive; //with语句是否是递归的。
+    private final List<WithQuery> queries; //所有的with语句。
 
     public With(boolean recursive, List<WithQuery> queries)
     {

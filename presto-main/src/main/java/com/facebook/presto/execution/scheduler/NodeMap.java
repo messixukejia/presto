@@ -21,6 +21,7 @@ import java.net.InetAddress;
 import java.util.Map;
 import java.util.Set;
 
+// comment_xu：用于存在presto的node信息。
 public class NodeMap
 {
     private final Map<String, InternalNode> nodesByNodeId;

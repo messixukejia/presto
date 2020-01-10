@@ -85,6 +85,7 @@ import static java.util.concurrent.Executors.newSingleThreadScheduledExecutor;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
+//comment_xu：与SQL语句相关的请求由该Resource处理，包括接受提交的SQL语句(POST)、获取查询执行的结果(GET)、取消查询（DEL）。
 @Path("/v1/statement")
 public class StatementResource
 {
@@ -166,10 +167,12 @@ public class StatementResource
                 blockEncodingSerde);
         queries.put(query.getQueryId(), query);
 
+        //comment_xu：获取查询结果，并组装成Response返回。
         QueryResults queryResults = query.getNextResult(OptionalLong.empty(), uriInfo, proto, DEFAULT_TARGET_RESULT_SIZE);
         return toResponse(query, queryResults);
     }
 
+    //comment_xu：根据Token返回queryi对应查询的部分结果。这里的token主要分批查询结果的顺序。
     @GET
     @Path("{queryId}/{token}")
     @Produces(MediaType.APPLICATION_JSON)
@@ -272,6 +275,7 @@ public class StatementResource
         return response.build();
     }
 
+    //comment_xu：用于取消一个query。
     @DELETE
     @Path("{queryId}/{token}")
     @Produces(MediaType.APPLICATION_JSON)

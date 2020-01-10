@@ -36,6 +36,7 @@ import java.util.Optional;
 import static com.google.common.base.Preconditions.checkArgument;
 import static java.util.Objects.requireNonNull;
 
+// comment_xu：用于向目的表写入数据。
 @Immutable
 public class TableWriterNode
         extends InternalPlanNode

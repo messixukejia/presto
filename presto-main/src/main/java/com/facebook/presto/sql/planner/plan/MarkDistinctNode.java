@@ -29,6 +29,7 @@ import java.util.Optional;
 import static com.google.common.base.Preconditions.checkArgument;
 import static java.util.Objects.requireNonNull;
 
+// comment_xu：用于处理 "select count(distinct ...) from ..." SQL语句的节点。
 @Immutable
 public class MarkDistinctNode
         extends InternalPlanNode

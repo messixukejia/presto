@@ -121,6 +121,7 @@ public class Query
             clientThread.interrupt();
         });
         try {
+            //comment_xu：获取查询结果并输出到终端。
             return renderQueryOutput(out, outputFormat, interactive);
         }
         finally {
@@ -129,6 +130,7 @@ public class Query
         }
     }
 
+    //comment_xu：根据传入的interactive标识，决定是否实时更新结果。为true则实时更新结果，为fasle则不实时更新。
     private boolean renderQueryOutput(PrintStream out, OutputFormat outputFormat, boolean interactive)
     {
         StatusPrinter statusPrinter = null;
@@ -138,12 +140,14 @@ public class Query
 
         if (interactive) {
             statusPrinter = new StatusPrinter(client, out, debug);
+            //comment_xu：若需要实时动态显示查询结果，则进行间隔打印结果的操作。
             statusPrinter.printInitialStatusUpdates();
         }
         else {
             processInitialStatusUpdates(warningsPrinter);
         }
 
+        //comment_xu：根据client的不同状态，进行后续操作。
         // if running or finished
         if (client.isRunning() || (client.isFinished() && client.finalStatusInfo().getError() == null)) {
             QueryStatusInfo results = client.isRunning() ? client.currentStatusInfo() : client.finalStatusInfo();
@@ -191,6 +195,8 @@ public class Query
 
     private void processInitialStatusUpdates(WarningsPrinter warningsPrinter)
     {
+        //comment_xu：如果client运行状态，且数据已经处理完毕，则循环获取下一批数据。
+        //comment_xu：若server暂未产出数据，则等待。
         while (client.isRunning() && (client.currentData().getData() == null)) {
             warningsPrinter.print(client.currentStatusInfo().getWarnings(), true, false);
             client.advance();

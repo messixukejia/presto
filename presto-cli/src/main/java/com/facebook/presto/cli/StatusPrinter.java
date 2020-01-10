@@ -96,6 +96,7 @@ Spilled: 20GB
             WarningsPrinter warningsPrinter = new ConsoleWarningsPrinter(console);
             while (client.isRunning()) {
                 try {
+                    //comment_xu：若client还有未处理完毕的数据，则直接退出。
                     // exit status loop if there is pending output
                     if (client.currentData().getData() != null) {
                         return;
@@ -120,12 +121,14 @@ Spilled: 20GB
                         update = true;
                     }
 
+                    //comment_xu：打印查询进度。
                     // update screen
                     if (update) {
                         updateScreen(warningsPrinter);
                         lastPrint = System.nanoTime();
                     }
 
+                    //comment_xu：获取下一批数据。（如果server暂时没有产出数据，则等待）
                     // fetch next results (server will wait for a while if no data)
                     client.advance();
                 }

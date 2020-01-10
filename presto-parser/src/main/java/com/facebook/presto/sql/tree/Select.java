@@ -22,11 +22,12 @@ import java.util.Optional;
 import static com.google.common.base.MoreObjects.toStringHelper;
 import static java.util.Objects.requireNonNull;
 
+//comment_xu：表示查询语句的select部分。
 public class Select
         extends Node
 {
-    private final boolean distinct;
-    private final List<SelectItem> selectItems;
+    private final boolean distinct; //是否含有distinct关键字
+    private final List<SelectItem> selectItems; //select的列
 
     public Select(boolean distinct, List<SelectItem> selectItems)
     {

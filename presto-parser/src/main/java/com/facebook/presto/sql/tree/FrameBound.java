@@ -22,6 +22,7 @@ import java.util.Optional;
 import static com.google.common.base.MoreObjects.toStringHelper;
 import static java.util.Objects.requireNonNull;
 
+//comment_xu：用于窗口函数中滑动窗口的可选参数。
 public class FrameBound
         extends Node
 {

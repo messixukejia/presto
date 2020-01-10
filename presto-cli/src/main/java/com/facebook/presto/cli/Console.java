@@ -83,26 +83,34 @@ public class Console
 
     public boolean run()
     {
+        //comment_xu：获取客户端启动参数，并存到ClientSession种。
         ClientSession session = clientOptions.toClientSession();
+
+        //comment_xu：Cli启动指定了--execute参数，说明直接执行通过shell传入的命令。
         boolean hasQuery = !isNullOrEmpty(clientOptions.execute);
+        //comment_xu：Cli启动指定了--file参数，说明读取文件中的命令。
         boolean isFromFile = !isNullOrEmpty(clientOptions.file);
 
+        //comment_xu：非--execute 和 --file的场景，则初始化客户端。
         if (!hasQuery && !isFromFile) {
             AnsiConsole.systemInstall();
         }
 
         initializeLogging(clientOptions.logLevelsFile);
 
+        //comment_xu：获取--execute指定的sql命令。
         String query = clientOptions.execute;
         if (hasQuery) {
             query += ";";
         }
 
+        //comment_xu：从文件中读取sql命令。
         if (isFromFile) {
             if (hasQuery) {
                 throw new RuntimeException("both --execute and --file specified");
             }
             try {
+                //comment_xu：读取文件中的命令，并存入query，后续统一使用hasQuery进行判断。
                 query = Files.asCharSource(new File(clientOptions.file), UTF_8).read();
                 hasQuery = true;
             }
@@ -121,6 +129,7 @@ public class Console
             awaitUninterruptibly(exited, EXIT_DELAY.toMillis(), MILLISECONDS);
         }));
 
+        //comment_xu：生成查询包装类，后续查询通过该类进行。
         try (QueryRunner queryRunner = new QueryRunner(
                 session,
                 clientOptions.debug,
@@ -139,10 +148,11 @@ public class Console
                 Optional.ofNullable(clientOptions.krb5KeytabPath),
                 Optional.ofNullable(clientOptions.krb5CredentialCachePath),
                 !clientOptions.krb5DisableRemoteServiceHostnameCanonicalization)) {
+            //comment_xu：如果cli参数通过--execute或--file指定了输入命令，则直接执行查询。
             if (hasQuery) {
                 return executeCommand(queryRunner, query, clientOptions.outputFormat, clientOptions.ignoreErrors);
             }
-
+            //comment_xu：否则，启动cli客户端，后续接收用户的输入。
             runConsole(queryRunner, exiting);
             return true;
         }
@@ -273,6 +283,7 @@ public class Console
     private static boolean executeCommand(QueryRunner queryRunner, String query, OutputFormat outputFormat, boolean ignoreErrors)
     {
         boolean success = true;
+        //comment_xu：通过StatementSplitter对输入的连续的SQL语句拆分，默认分隔符为";"，然后分别执行单条查询。
         StatementSplitter splitter = new StatementSplitter(query);
         for (Statement split : splitter.getCompleteStatements()) {
             if (!isEmptyStatement(split.statement())) {
@@ -308,6 +319,7 @@ public class Console
             return false;
         }
 
+        //comment_xu：执行查询
         try (Query query = queryRunner.startQuery(finalSql)) {
             boolean success = query.renderOutput(System.out, outputFormat, interactive);
 

@@ -53,6 +53,9 @@ import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
 
+//comment_xu：提供了对元数据进行各种操作的接口。这些接口在对SQL进行语义分析以及某些DDL操作（例如create table）的时候会用到。
+//Metadata API将不同的connector对其元数据的各种操作抽象成了统一的接口，使得在使用这些接口时无须考虑具体的底层connector实现。
+//Metadata API除了提供对元数据操作的接口，还提供了一些通用的与connector无关的方法。
 public interface Metadata
 {
     void verifyComparableOrderableContract();

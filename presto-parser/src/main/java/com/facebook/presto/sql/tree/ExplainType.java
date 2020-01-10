@@ -22,13 +22,14 @@ import java.util.Optional;
 import static com.google.common.base.MoreObjects.toStringHelper;
 import static java.util.Objects.requireNonNull;
 
+//comment_xu：Explain语句的类型
 public class ExplainType
         extends ExplainOption
 {
     public enum Type
     {
-        LOGICAL,
-        DISTRIBUTED,
+        LOGICAL,  //逻辑执行计划
+        DISTRIBUTED, //分布式执行计划
         VALIDATE,
         IO
     }

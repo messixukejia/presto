@@ -22,12 +22,13 @@ import java.util.Optional;
 import static com.google.common.base.MoreObjects.toStringHelper;
 import static java.util.Objects.requireNonNull;
 
+//comment_xu：窗口函数。
 public class Window
         extends Node
 {
-    private final List<Expression> partitionBy;
-    private final Optional<OrderBy> orderBy;
-    private final Optional<WindowFrame> frame;
+    private final List<Expression> partitionBy; //partion by的语句或表达式
+    private final Optional<OrderBy> orderBy;    //order by的语句或表达式
+    private final Optional<WindowFrame> frame;  //滑动窗口的可选参数
 
     public Window(List<Expression> partitionBy, Optional<OrderBy> orderBy, Optional<WindowFrame> frame)
     {

@@ -17,6 +17,7 @@ import com.facebook.presto.sql.ExpressionFormatter;
 
 import java.util.Optional;
 
+//comment_xu：SQL语句中出现的表达式。子类是表达式具体的类型。
 public abstract class Expression
         extends Node
 {

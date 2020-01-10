@@ -81,6 +81,7 @@ import static javax.ws.rs.core.MediaType.APPLICATION_JSON;
 /**
  * Manages tasks on this worker node
  */
+//comment_xu：处理task相关的RESTful请求。
 @Path("/v1/task")
 public class TaskResource
 {
@@ -119,6 +120,7 @@ public class TaskResource
         return allTaskInfo;
     }
 
+    //comment_xu：创建一个新的task或更新一个task的状态。
     @POST
     @Path("{taskId}")
     @Consumes({APPLICATION_JSON, APPLICATION_JACKSON_SMILE})
@@ -143,6 +145,7 @@ public class TaskResource
         return Response.ok().entity(taskInfo).build();
     }
 
+    //comment_xu：查询taskid对应的task信息。
     @GET
     @Path("{taskId}")
     @Consumes({APPLICATION_JSON, APPLICATION_JACKSON_SMILE})
@@ -217,6 +220,7 @@ public class TaskResource
                 .withTimeout(timeout);
     }
 
+    //comment_xu：删除或提前结束taskid对应的task。
     @DELETE
     @Path("{taskId}")
     @Consumes({APPLICATION_JSON, APPLICATION_JACKSON_SMILE})

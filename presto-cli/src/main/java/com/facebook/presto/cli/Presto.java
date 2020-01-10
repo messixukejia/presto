@@ -21,8 +21,10 @@ public final class Presto
 
     public static void main(String[] args)
     {
+        //comment_xu：根据传递的参数，初始化一个Console对象，该对象保存了Cli启动时传入的所有参数。
         Console console = singleCommand(Console.class).parse(args);
 
+        //comment_xu：如果是--help或者--version，则屏幕上打印相关信息后直接退出。
         if (console.helpOption.showHelpIfRequested() ||
                 console.versionOption.showVersionIfRequested()) {
             return;

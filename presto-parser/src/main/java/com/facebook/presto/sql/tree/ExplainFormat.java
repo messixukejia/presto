@@ -22,6 +22,7 @@ import java.util.Optional;
 import static com.google.common.base.MoreObjects.toStringHelper;
 import static java.util.Objects.requireNonNull;
 
+//comment_xu：表示Explain语句输出结果的格式，有TEXT和GRAPHVIZ两种格式。
 public class ExplainFormat
         extends ExplainOption
 {

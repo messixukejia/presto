@@ -35,6 +35,7 @@ import java.util.function.Consumer;
 
 import static java.util.Objects.requireNonNull;
 
+// comment_xu：表示一次查询执行，用于启动、停止与管理一个查询，及统计这个查询到相关信息。
 public interface QueryExecution
         extends ManagedQueryExecution, TrackedQuery
 {

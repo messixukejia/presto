@@ -31,6 +31,7 @@ import static java.util.Collections.unmodifiableList;
 import static java.util.Collections.unmodifiableMap;
 import static java.util.Objects.requireNonNull;
 
+// comment_xu：用于读取表的数据。
 @Immutable
 public final class TableScanNode
         extends PlanNode

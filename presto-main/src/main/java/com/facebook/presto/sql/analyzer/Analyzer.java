@@ -71,9 +71,13 @@ public class Analyzer
         return analyze(statement, false);
     }
 
+    // comment_xu：构造一个StatementAnalyzer对statement进行分析，并将结果存入analysis返回。
     public Analysis analyze(Statement statement, boolean isDescribe)
     {
         Statement rewrittenStatement = StatementRewrite.rewrite(session, metadata, sqlParser, queryExplainer, statement, parameters, accessControl, warningCollector);
+        System.out.println("statement:" + statement.toString());
+        System.out.println("rewrittenStatement: " + rewrittenStatement.toString());
+
         Analysis analysis = new Analysis(rewrittenStatement, parameters, isDescribe);
         StatementAnalyzer analyzer = new StatementAnalyzer(analysis, metadata, sqlParser, accessControl, session, warningCollector);
         analyzer.analyze(rewrittenStatement, Optional.empty());

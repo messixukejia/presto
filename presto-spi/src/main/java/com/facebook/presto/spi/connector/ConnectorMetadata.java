@@ -60,6 +60,7 @@ import static java.util.Collections.emptyList;
 import static java.util.Collections.emptyMap;
 import static java.util.stream.Collectors.toList;
 
+//comment_xu：ConnectorMetadata只保留了Metadata中元数据操作的接口。
 public interface ConnectorMetadata
 {
     /**

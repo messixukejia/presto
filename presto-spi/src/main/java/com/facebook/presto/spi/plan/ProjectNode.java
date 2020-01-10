@@ -24,6 +24,7 @@ import java.util.List;
 import static java.util.Collections.singletonList;
 import static java.util.Objects.requireNonNull;
 
+// comment_xu：用于列映射的节点。用于将projectnode下层节点输出的列 映射到 projectnode上层节点输入的列。
 @Immutable
 public final class ProjectNode
         extends PlanNode

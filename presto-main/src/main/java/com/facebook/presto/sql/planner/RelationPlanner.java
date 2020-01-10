@@ -105,6 +105,7 @@ import static com.google.common.base.Verify.verify;
 import static com.google.common.collect.ImmutableList.toImmutableList;
 import static java.util.Objects.requireNonNull;
 
+//comment_xu：用于针对Relation类型到SQL语句生成执行计划。
 class RelationPlanner
         extends DefaultTraversalVisitor<RelationPlan, Void>
 {

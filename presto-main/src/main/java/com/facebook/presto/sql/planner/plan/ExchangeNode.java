@@ -42,6 +42,7 @@ import static com.facebook.presto.util.MoreLists.listOfListsCopy;
 import static com.google.common.base.Preconditions.checkArgument;
 import static java.util.Objects.requireNonNull;
 
+// comment_xu：用于执行计划在不同Stage间交换数据的节点，出现在逻辑计划中。
 @Immutable
 public class ExchangeNode
         extends InternalPlanNode

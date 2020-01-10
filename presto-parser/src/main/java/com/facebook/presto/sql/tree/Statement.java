@@ -15,6 +15,7 @@ package com.facebook.presto.sql.tree;
 
 import java.util.Optional;
 
+//comment_xu：表示presto中所能使用的所有类型的SQL语句。
 public abstract class Statement
         extends Node
 {

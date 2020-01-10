@@ -29,6 +29,7 @@ import static java.util.Collections.emptyList;
 import static java.util.Collections.unmodifiableList;
 import static java.util.Objects.requireNonNull;
 
+// comment_xu：用于执行values语句的节点。
 @Immutable
 public final class ValuesNode
         extends PlanNode

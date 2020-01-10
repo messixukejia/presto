@@ -28,6 +28,7 @@ import java.util.List;
 import static com.google.common.base.Preconditions.checkArgument;
 import static java.util.Objects.requireNonNull;
 
+// comment_xu：用于处理抽样函数。
 @Immutable
 public class SampleNode
         extends InternalPlanNode
