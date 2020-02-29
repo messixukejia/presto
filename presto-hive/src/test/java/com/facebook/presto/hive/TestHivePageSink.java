@@ -80,6 +80,8 @@ import static com.facebook.presto.hive.HiveType.HIVE_STRING;
 import static com.facebook.presto.hive.LocationHandle.TableType.NEW;
 import static com.facebook.presto.hive.LocationHandle.WriteMode.DIRECT_TO_TARGET_NEW_DIRECTORY;
 import static com.facebook.presto.hive.TestHiveUtil.createTestingFileHiveMetastore;
+import static com.facebook.presto.spi.SplitContext.NON_CACHEABLE;
+import static com.facebook.presto.spi.schedule.NodeSelectionStrategy.NO_PREFERENCE;
 import static com.facebook.presto.spi.type.BigintType.BIGINT;
 import static com.facebook.presto.spi.type.DateType.DATE;
 import static com.facebook.presto.spi.type.DoubleType.DOUBLE;
@@ -235,7 +237,7 @@ public class TestHivePageSink
                 ImmutableList.of(),
                 OptionalInt.empty(),
                 OptionalInt.empty(),
-                false,
+                NO_PREFERENCE,
                 getColumnHandles().size(),
                 ImmutableMap.of(),
                 Optional.empty(),
@@ -261,7 +263,7 @@ public class TestHivePageSink
                         false,
                         "layout")));
         HivePageSourceProvider provider = new HivePageSourceProvider(config, createTestHdfsEnvironment(config, metastoreClientConfig), getDefaultHiveRecordCursorProvider(config, metastoreClientConfig), getDefaultHiveBatchPageSourceFactories(config, metastoreClientConfig), getDefaultHiveSelectivePageSourceFactories(config, metastoreClientConfig), TYPE_MANAGER, ROW_EXPRESSION_SERVICE);
-        return provider.createPageSource(transaction, getSession(config), split, tableHandle.getLayout().get(), ImmutableList.copyOf(getColumnHandles()));
+        return provider.createPageSource(transaction, getSession(config), split, tableHandle.getLayout().get(), ImmutableList.copyOf(getColumnHandles()), NON_CACHEABLE);
     }
 
     private static ConnectorPageSink createPageSink(HiveTransactionHandle transaction, HiveClientConfig config, MetastoreClientConfig metastoreClientConfig, ExtendedHiveMetastore metastore, Path outputPath, HiveWriterStats stats)

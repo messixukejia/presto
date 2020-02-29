@@ -82,6 +82,7 @@ import static com.facebook.presto.spi.relation.SpecialFormExpression.Form.SWITCH
 import static com.facebook.presto.spi.relation.SpecialFormExpression.Form.WHEN;
 import static com.facebook.presto.spi.type.BooleanType.BOOLEAN;
 import static com.facebook.presto.spi.type.IntegerType.INTEGER;
+import static com.facebook.presto.spi.type.JsonType.JSON;
 import static com.facebook.presto.spi.type.StandardTypes.ARRAY;
 import static com.facebook.presto.spi.type.StandardTypes.MAP;
 import static com.facebook.presto.spi.type.StandardTypes.ROW;
@@ -100,7 +101,6 @@ import static com.facebook.presto.sql.planner.RowExpressionInterpreter.SpecialCa
 import static com.facebook.presto.sql.relational.Expressions.call;
 import static com.facebook.presto.sql.relational.Expressions.constant;
 import static com.facebook.presto.sql.relational.SqlFunctionUtils.getSqlFunctionRowExpression;
-import static com.facebook.presto.type.JsonType.JSON;
 import static com.facebook.presto.type.LikeFunctions.isLikePattern;
 import static com.facebook.presto.type.LikeFunctions.unescapeLiteralLikePattern;
 import static com.facebook.presto.type.UnknownType.UNKNOWN;
@@ -883,8 +883,19 @@ public class RowExpressionInterpreter
                 if (possibleCompiledPattern == null) {
                     return changed(null);
                 }
-                checkState((resolution.isCastFunction(((CallExpression) possibleCompiledPattern).getFunctionHandle())));
-                possibleCompiledPattern = functionInvoker.invoke(((CallExpression) possibleCompiledPattern).getFunctionHandle(), session, nonCompiledPattern);
+
+                checkState(possibleCompiledPattern instanceof CallExpression);
+                // this corresponds to ExpressionInterpreter::getConstantPattern
+                if (hasEscape) {
+                    // like_pattern(pattern, escape)
+                    possibleCompiledPattern = functionInvoker.invoke(((CallExpression) possibleCompiledPattern).getFunctionHandle(), session, nonCompiledPattern, escape);
+                }
+                else {
+                    // like_pattern(pattern)
+                    possibleCompiledPattern = functionInvoker.invoke(((CallExpression) possibleCompiledPattern).getFunctionHandle(), session, nonCompiledPattern);
+                }
+
+                checkState(possibleCompiledPattern instanceof Regex, "unexpected like pattern type " + possibleCompiledPattern.getClass());
                 return changed(interpretLikePredicate(argumentTypes.get(0), (Slice) value, (Regex) possibleCompiledPattern));
             }
 

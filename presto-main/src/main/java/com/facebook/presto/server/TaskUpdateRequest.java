@@ -17,16 +17,16 @@ import com.facebook.presto.SessionRepresentation;
 import com.facebook.presto.execution.TaskSource;
 import com.facebook.presto.execution.buffer.OutputBuffers;
 import com.facebook.presto.execution.scheduler.TableWriteInfo;
-import com.facebook.presto.sql.planner.PlanFragment;
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.collect.ImmutableList;
 
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.OptionalInt;
 
+import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_ABSENT;
 import static com.google.common.base.MoreObjects.toStringHelper;
 import static java.util.Objects.requireNonNull;
 
@@ -35,20 +35,18 @@ public class TaskUpdateRequest
     private final SessionRepresentation session;
     // extraCredentials is stored separately from SessionRepresentation to avoid being leaked
     private final Map<String, String> extraCredentials;
-    private final Optional<PlanFragment> fragment;
+    private final Optional<byte[]> fragment;
     private final List<TaskSource> sources;
     private final OutputBuffers outputIds;
-    private final OptionalInt totalPartitions;
     private final Optional<TableWriteInfo> tableWriteInfo;
 
     @JsonCreator
     public TaskUpdateRequest(
             @JsonProperty("session") SessionRepresentation session,
             @JsonProperty("extraCredentials") Map<String, String> extraCredentials,
-            @JsonProperty("fragment") Optional<PlanFragment> fragment,
+            @JsonProperty("fragment") Optional<byte[]> fragment,
             @JsonProperty("sources") List<TaskSource> sources,
             @JsonProperty("outputIds") OutputBuffers outputIds,
-            @JsonProperty("totalPartitions") OptionalInt totalPartitions,
             @JsonProperty("tableWriteInfo") Optional<TableWriteInfo> tableWriteInfo)
     {
         requireNonNull(session, "session is null");
@@ -56,7 +54,6 @@ public class TaskUpdateRequest
         requireNonNull(fragment, "fragment is null");
         requireNonNull(sources, "sources is null");
         requireNonNull(outputIds, "outputIds is null");
-        requireNonNull(totalPartitions, "totalPartitions is null");
         requireNonNull(tableWriteInfo, "tableWriteInfo is null");
 
         this.session = session;
@@ -64,7 +61,6 @@ public class TaskUpdateRequest
         this.fragment = fragment;
         this.sources = ImmutableList.copyOf(sources);
         this.outputIds = outputIds;
-        this.totalPartitions = totalPartitions;
         this.tableWriteInfo = tableWriteInfo;
     }
 
@@ -80,8 +76,9 @@ public class TaskUpdateRequest
         return extraCredentials;
     }
 
+    @JsonInclude(NON_ABSENT)
     @JsonProperty
-    public Optional<PlanFragment> getFragment()
+    public Optional<byte[]> getFragment()
     {
         return fragment;
     }
@@ -99,12 +96,6 @@ public class TaskUpdateRequest
     }
 
     @JsonProperty
-    public OptionalInt getTotalPartitions()
-    {
-        return totalPartitions;
-    }
-
-    @JsonProperty
     public Optional<TableWriteInfo> getTableWriteInfo()
     {
         return tableWriteInfo;
@@ -119,7 +110,6 @@ public class TaskUpdateRequest
                 .add("fragment", fragment)
                 .add("sources", sources)
                 .add("outputIds", outputIds)
-                .add("totalPartitions", totalPartitions)
                 .toString();
     }
 }

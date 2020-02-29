@@ -59,11 +59,13 @@ import static com.facebook.presto.spi.type.DecimalType.createDecimalType;
 import static com.facebook.presto.spi.type.DoubleType.DOUBLE;
 import static com.facebook.presto.spi.type.HyperLogLogType.HYPER_LOG_LOG;
 import static com.facebook.presto.spi.type.IntegerType.INTEGER;
+import static com.facebook.presto.spi.type.JsonType.JSON;
 import static com.facebook.presto.spi.type.P4HyperLogLogType.P4_HYPER_LOG_LOG;
 import static com.facebook.presto.spi.type.QuantileDigestParametricType.QDIGEST;
 import static com.facebook.presto.spi.type.RealType.REAL;
 import static com.facebook.presto.spi.type.RowType.Field;
 import static com.facebook.presto.spi.type.SmallintType.SMALLINT;
+import static com.facebook.presto.spi.type.TDigestParametricType.TDIGEST;
 import static com.facebook.presto.spi.type.TimeType.TIME;
 import static com.facebook.presto.spi.type.TimeWithTimeZoneType.TIME_WITH_TIME_ZONE;
 import static com.facebook.presto.spi.type.TimestampType.TIMESTAMP;
@@ -83,7 +85,6 @@ import static com.facebook.presto.type.IpAddressType.IPADDRESS;
 import static com.facebook.presto.type.IpPrefixType.IPPREFIX;
 import static com.facebook.presto.type.JoniRegexpType.JONI_REGEXP;
 import static com.facebook.presto.type.JsonPathType.JSON_PATH;
-import static com.facebook.presto.type.JsonType.JSON;
 import static com.facebook.presto.type.LikePatternType.LIKE_PATTERN;
 import static com.facebook.presto.type.MapParametricType.MAP;
 import static com.facebook.presto.type.Re2JRegexpType.RE2J_REGEXP;
@@ -158,6 +159,7 @@ public final class TypeRegistry
         addParametricType(MAP);
         addParametricType(FUNCTION);
         addParametricType(QDIGEST);
+        addParametricType(TDIGEST);
 
         for (Type type : types) {
             addType(type);

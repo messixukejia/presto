@@ -16,6 +16,7 @@ package com.facebook.presto.spi.block;
 import com.facebook.presto.spi.predicate.Utils;
 import com.facebook.presto.spi.type.Type;
 import io.airlift.slice.Slice;
+import io.airlift.slice.SliceOutput;
 import org.openjdk.jol.info.ClassLayout;
 
 import java.util.function.BiConsumer;
@@ -244,6 +245,13 @@ public class RunLengthEncodedBlock
     }
 
     @Override
+    public void writePositionTo(int position, SliceOutput output)
+    {
+        checkReadablePosition(position);
+        value.writePositionTo(0, output);
+    }
+
+    @Override
     public boolean equals(int position, int offset, Block otherBlock, int otherPosition, int otherOffset, int length)
     {
         checkReadablePosition(position);
@@ -282,7 +290,7 @@ public class RunLengthEncodedBlock
     public String toString()
     {
         StringBuilder sb = new StringBuilder(getClass().getSimpleName());
-        sb.append("positionCount=").append(positionCount);
+        sb.append("{positionCount=").append(positionCount);
         sb.append(", value=").append(value);
         sb.append('}');
         return sb.toString();
@@ -302,7 +310,7 @@ public class RunLengthEncodedBlock
     private void checkReadablePosition(int position)
     {
         if (position < 0 || position >= positionCount) {
-            throw new IllegalArgumentException("position is not valid");
+            throw new IllegalArgumentException("position is not valid: " + position);
         }
     }
 

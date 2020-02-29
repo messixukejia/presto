@@ -46,6 +46,7 @@ import java.util.TreeMap;
 import java.util.stream.IntStream;
 
 import static com.facebook.airlift.json.JsonCodec.jsonCodec;
+import static com.facebook.presto.hive.HiveFileContext.DEFAULT_HIVE_FILE_CONTEXT;
 import static com.facebook.presto.memory.context.AggregatedMemoryContext.newSimpleAggregatedMemoryContext;
 import static com.facebook.presto.orc.OrcEncoding.ORC;
 import static com.facebook.presto.orc.OrcPredicate.TRUE;
@@ -105,7 +106,8 @@ public final class OrcFileRewriter
                     ORC,
                     orcFileTailSource,
                     stripeMetadataSource,
-                    new OrcReaderOptions(readerAttributes.getMaxMergeDistance(), readerAttributes.getTinyStripeThreshold(), HUGE_MAX_READ_BLOCK_SIZE, readerAttributes.isZstdJniDecompressionEnabled()));
+                    new OrcReaderOptions(readerAttributes.getMaxMergeDistance(), readerAttributes.getTinyStripeThreshold(), HUGE_MAX_READ_BLOCK_SIZE, readerAttributes.isZstdJniDecompressionEnabled()),
+                    DEFAULT_HIVE_FILE_CONTEXT);
 
             if (reader.getFooter().getNumberOfRows() < rowsToDelete.length()) {
                 throw new IOException("File has fewer rows than deletion vector");
@@ -167,7 +169,15 @@ public final class OrcFileRewriter
 
             StorageTypeConverter storageTypeConverter = new StorageTypeConverter(typeManager);
 
-            try (Closer<OrcBatchRecordReader, IOException> recordReader = closer(reader.createBatchRecordReader(storageTypeConverter.toStorageTypes(readerColumns), TRUE, DEFAULT_STORAGE_TIMEZONE, newSimpleAggregatedMemoryContext(), INITIAL_BATCH_SIZE), OrcBatchRecordReader::close);
+            try (Closer<OrcBatchRecordReader, IOException> recordReader = closer(
+                    reader.createBatchRecordReader(
+                            storageTypeConverter.toStorageTypes(readerColumns),
+                            TRUE,
+                            DEFAULT_STORAGE_TIMEZONE,
+                            newSimpleAggregatedMemoryContext(),
+                            INITIAL_BATCH_SIZE,
+                            DEFAULT_HIVE_FILE_CONTEXT),
+                    OrcBatchRecordReader::close);
                     Closer<OrcWriter, IOException> writer = closer(new OrcWriter(
                             orcDataEnvironment.createOrcDataSink(fileSystem, output),
                             writerColumnIds,

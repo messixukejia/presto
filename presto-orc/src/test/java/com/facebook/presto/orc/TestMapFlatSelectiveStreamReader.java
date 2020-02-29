@@ -14,7 +14,6 @@
 package com.facebook.presto.orc;
 
 import com.facebook.presto.Session;
-import com.facebook.presto.orc.TupleDomainFilter.BigintValues;
 import com.facebook.presto.spi.ConnectorSession;
 import com.facebook.presto.spi.Page;
 import com.facebook.presto.spi.Subfield;
@@ -22,10 +21,15 @@ import com.facebook.presto.spi.block.Block;
 import com.facebook.presto.spi.relation.Predicate;
 import com.facebook.presto.spi.type.BooleanType;
 import com.facebook.presto.spi.type.DoubleType;
+import com.facebook.presto.spi.type.IntegerType;
+import com.facebook.presto.spi.type.NamedTypeSignature;
+import com.facebook.presto.spi.type.RowFieldName;
 import com.facebook.presto.spi.type.SqlTimestamp;
 import com.facebook.presto.spi.type.SqlVarbinary;
+import com.facebook.presto.spi.type.StandardTypes;
 import com.facebook.presto.spi.type.TimeZoneKey;
 import com.facebook.presto.spi.type.Type;
+import com.facebook.presto.spi.type.TypeSignatureParameter;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
@@ -47,13 +51,13 @@ import static com.facebook.presto.orc.OrcTester.arrayType;
 import static com.facebook.presto.orc.OrcTester.assertFileContentsPresto;
 import static com.facebook.presto.orc.OrcTester.filterRows;
 import static com.facebook.presto.orc.OrcTester.mapType;
-import static com.facebook.presto.orc.OrcTester.rowType;
 import static com.facebook.presto.orc.TestMapFlatSelectiveStreamReader.ExpectedValuesBuilder.Frequency.ALL;
 import static com.facebook.presto.orc.TestMapFlatSelectiveStreamReader.ExpectedValuesBuilder.Frequency.NONE;
 import static com.facebook.presto.orc.TestMapFlatSelectiveStreamReader.ExpectedValuesBuilder.Frequency.SOME;
 import static com.facebook.presto.orc.TestingOrcPredicate.createOrcPredicate;
 import static com.facebook.presto.orc.TupleDomainFilter.IS_NOT_NULL;
 import static com.facebook.presto.orc.TupleDomainFilter.IS_NULL;
+import static com.facebook.presto.orc.TupleDomainFilterUtils.toBigintValues;
 import static com.facebook.presto.spi.type.BigintType.BIGINT;
 import static com.facebook.presto.spi.type.IntegerType.INTEGER;
 import static com.facebook.presto.spi.type.RealType.REAL;
@@ -61,6 +65,7 @@ import static com.facebook.presto.spi.type.SmallintType.SMALLINT;
 import static com.facebook.presto.spi.type.TinyintType.TINYINT;
 import static com.facebook.presto.spi.type.VarbinaryType.VARBINARY;
 import static com.facebook.presto.spi.type.VarcharType.VARCHAR;
+import static com.facebook.presto.testing.TestingEnvironment.TYPE_MANAGER;
 import static com.facebook.presto.testing.TestingSession.testSessionBuilder;
 import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.io.Resources.getResource;
@@ -69,6 +74,13 @@ import static java.util.stream.Collectors.toList;
 public class TestMapFlatSelectiveStreamReader
 {
     // TODO: Add tests for timestamp as value type
+
+    private static final Type STRUCT_TYPE = TYPE_MANAGER.getParameterizedType(
+            StandardTypes.ROW,
+            ImmutableList.of(
+                    TypeSignatureParameter.of(new NamedTypeSignature(Optional.of(new RowFieldName("value1", false)), IntegerType.INTEGER.getTypeSignature())),
+                    TypeSignatureParameter.of(new NamedTypeSignature(Optional.of(new RowFieldName("value2", false)), IntegerType.INTEGER.getTypeSignature())),
+                    TypeSignatureParameter.of(new NamedTypeSignature(Optional.of(new RowFieldName("value3", false)), IntegerType.INTEGER.getTypeSignature()))));
 
     private static final int NUM_ROWS = 31_234;
 
@@ -264,7 +276,7 @@ public class TestMapFlatSelectiveStreamReader
         runTest(
                 "test_flat_map/flat_map_struct.dwrf",
                 INTEGER,
-                rowType(INTEGER, INTEGER, INTEGER),
+                STRUCT_TYPE,
                 ExpectedValuesBuilder.get(Function.identity(), TestMapFlatSelectiveStreamReader::intToList));
     }
 
@@ -275,7 +287,7 @@ public class TestMapFlatSelectiveStreamReader
         runTest(
                 "test_flat_map/flat_map_struct_with_null.dwrf",
                 INTEGER,
-                rowType(INTEGER, INTEGER, INTEGER),
+                STRUCT_TYPE,
                 ExpectedValuesBuilder.get(Function.identity(), TestMapFlatSelectiveStreamReader::intToList).setNullValuesFrequency(SOME));
     }
 
@@ -383,7 +395,7 @@ public class TestMapFlatSelectiveStreamReader
         List<Integer> ids = IntStream.range(0, expectedValues.size()).map(i -> i % 10).boxed().collect(toImmutableList());
         ImmutableList<Type> types = ImmutableList.of(mapType, INTEGER);
 
-        Map<Integer, Map<Subfield, TupleDomainFilter>> filters = ImmutableMap.of(1, ImmutableMap.of(new Subfield("c"), BigintValues.of(new long[] {1, 5, 6}, true)));
+        Map<Integer, Map<Subfield, TupleDomainFilter>> filters = ImmutableMap.of(1, ImmutableMap.of(new Subfield("c"), toBigintValues(new long[] {1, 5, 6}, true)));
         assertFileContentsPresto(
                 types,
                 new File(getResource(testOrcFileName).getFile()),

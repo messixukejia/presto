@@ -266,10 +266,10 @@ public class MetadataManager
         return typeManager.getType(signature);
     }
 
-    public List<SqlFunction> listFunctions()
+    public List<SqlFunction> listFunctions(Session session)
     {
         // TODO: transactional when FunctionManager is made transactional
-        return functions.listFunctions();
+        return functions.listFunctions(session);
     }
 
     @Override
@@ -733,6 +733,17 @@ public class MetadataManager
     }
 
     @Override
+    public Optional<NewTableLayout> getPreferredShuffleLayoutForInsert(Session session, TableHandle table)
+    {
+        ConnectorId connectorId = table.getConnectorId();
+        CatalogMetadata catalogMetadata = getCatalogMetadataForWrite(session, connectorId);
+        ConnectorMetadata metadata = catalogMetadata.getMetadata();
+
+        return metadata.getPreferredShuffleLayoutForInsert(session.toConnectorSession(connectorId), table.getConnectorHandle())
+                .map(layout -> new NewTableLayout(connectorId, catalogMetadata.getTransactionHandleFor(connectorId), layout));
+    }
+
+    @Override
     public TableStatisticsMetadata getStatisticsCollectionMetadataForWrite(Session session, String catalogName, ConnectorTableMetadata tableMetadata)
     {
         CatalogMetadata catalogMetadata = getCatalogMetadataForWrite(session, catalogName);
@@ -780,6 +791,19 @@ public class MetadataManager
         ConnectorTransactionHandle transactionHandle = catalogMetadata.getTransactionHandleFor(connectorId);
         ConnectorSession connectorSession = session.toConnectorSession(connectorId);
         return metadata.getNewTableLayout(connectorSession, tableMetadata)
+                .map(layout -> new NewTableLayout(connectorId, transactionHandle, layout));
+    }
+
+    @Override
+    public Optional<NewTableLayout> getPreferredShuffleLayoutForNewTable(Session session, String catalogName, ConnectorTableMetadata tableMetadata)
+    {
+        CatalogMetadata catalogMetadata = getCatalogMetadataForWrite(session, catalogName);
+        ConnectorId connectorId = catalogMetadata.getConnectorId();
+        ConnectorMetadata metadata = catalogMetadata.getMetadata();
+
+        ConnectorTransactionHandle transactionHandle = catalogMetadata.getTransactionHandleFor(connectorId);
+        ConnectorSession connectorSession = session.toConnectorSession(connectorId);
+        return metadata.getPreferredShuffleLayoutForNewTable(connectorSession, tableMetadata)
                 .map(layout -> new NewTableLayout(connectorId, transactionHandle, layout));
     }
 
@@ -993,13 +1017,13 @@ public class MetadataManager
     }
 
     @Override
-    public void createView(Session session, QualifiedObjectName viewName, String viewData, boolean replace)
+    public void createView(Session session, String catalogName, ConnectorTableMetadata viewMetadata, String viewData, boolean replace)
     {
-        CatalogMetadata catalogMetadata = getCatalogMetadataForWrite(session, viewName.getCatalogName());
+        CatalogMetadata catalogMetadata = getCatalogMetadataForWrite(session, catalogName);
         ConnectorId connectorId = catalogMetadata.getConnectorId();
         ConnectorMetadata metadata = catalogMetadata.getMetadata();
 
-        metadata.createView(session.toConnectorSession(connectorId), viewName.asSchemaTableName(), viewData, replace);
+        metadata.createView(session.toConnectorSession(connectorId), viewMetadata, viewData, replace);
     }
 
     @Override

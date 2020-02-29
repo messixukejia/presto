@@ -48,6 +48,7 @@ import com.facebook.presto.spi.UpdatablePageSource;
 import com.facebook.presto.spi.connector.ConnectorTransactionHandle;
 import com.facebook.presto.spi.memory.MemoryPoolId;
 import com.facebook.presto.spi.plan.PlanNodeId;
+import com.facebook.presto.spi.schedule.NodeSelectionStrategy;
 import com.facebook.presto.spi.type.TestingTypeManager;
 import com.facebook.presto.spi.type.Type;
 import com.facebook.presto.spiller.SpillSpaceTracker;
@@ -87,6 +88,7 @@ import static com.facebook.airlift.concurrent.Threads.threadsNamed;
 import static com.facebook.presto.SessionTestUtils.TEST_SESSION;
 import static com.facebook.presto.block.BlockAssertions.createStringSequenceBlock;
 import static com.facebook.presto.block.BlockAssertions.createStringsBlock;
+import static com.facebook.presto.execution.TaskManagerConfig.TaskPriorityTracking.TASK_FAIR;
 import static com.facebook.presto.execution.TaskTestUtils.TABLE_SCAN_NODE_ID;
 import static com.facebook.presto.execution.TaskTestUtils.createTestSplitMonitor;
 import static com.facebook.presto.execution.buffer.BufferState.OPEN;
@@ -96,6 +98,8 @@ import static com.facebook.presto.execution.buffer.OutputBuffers.createInitialEm
 import static com.facebook.presto.memory.context.AggregatedMemoryContext.newSimpleAggregatedMemoryContext;
 import static com.facebook.presto.operator.PipelineExecutionStrategy.GROUPED_EXECUTION;
 import static com.facebook.presto.operator.PipelineExecutionStrategy.UNGROUPED_EXECUTION;
+import static com.facebook.presto.spi.SplitContext.NON_CACHEABLE;
+import static com.facebook.presto.spi.schedule.NodeSelectionStrategy.NO_PREFERENCE;
 import static com.facebook.presto.spi.type.VarcharType.VARCHAR;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
@@ -131,7 +135,7 @@ public class TestSqlTaskExecution
     {
         ScheduledExecutorService taskNotificationExecutor = newScheduledThreadPool(10, threadsNamed("task-notification-%s"));
         ScheduledExecutorService driverYieldExecutor = newScheduledThreadPool(2, threadsNamed("driver-yield-%s"));
-        TaskExecutor taskExecutor = new TaskExecutor(5, 10, 3, 4, Ticker.systemTicker());
+        TaskExecutor taskExecutor = new TaskExecutor(5, 10, 3, 4, TASK_FAIR, Ticker.systemTicker());
         taskExecutor.start();
 
         try {
@@ -306,7 +310,7 @@ public class TestSqlTaskExecution
     {
         ScheduledExecutorService taskNotificationExecutor = newScheduledThreadPool(10, threadsNamed("task-notification-%s"));
         ScheduledExecutorService driverYieldExecutor = newScheduledThreadPool(2, threadsNamed("driver-yield-%s"));
-        TaskExecutor taskExecutor = new TaskExecutor(5, 10, 3, 4, Ticker.systemTicker());
+        TaskExecutor taskExecutor = new TaskExecutor(5, 10, 3, 4, TASK_FAIR, Ticker.systemTicker());
         taskExecutor.start();
 
         try {
@@ -616,7 +620,7 @@ public class TestSqlTaskExecution
                 driverYieldExecutor,
                 new DataSize(1, MEGABYTE),
                 new SpillSpaceTracker(new DataSize(1, GIGABYTE)));
-        return queryContext.addTaskContext(taskStateMachine, TEST_SESSION, false, false, OptionalInt.empty(), false);
+        return queryContext.addTaskContext(taskStateMachine, TEST_SESSION, false, false, false);
     }
 
     private PartitionedOutputBuffer newTestingOutputBuffer(ScheduledExecutorService taskNotificationExecutor)
@@ -704,7 +708,7 @@ public class TestSqlTaskExecution
 
     private ScheduledSplit newScheduledSplit(int sequenceId, PlanNodeId planNodeId, Lifespan lifespan, int begin, int count)
     {
-        return new ScheduledSplit(sequenceId, planNodeId, new Split(CONNECTOR_ID, TRANSACTION_HANDLE, new TestingSplit(begin, begin + count), lifespan));
+        return new ScheduledSplit(sequenceId, planNodeId, new Split(CONNECTOR_ID, TRANSACTION_HANDLE, new TestingSplit(begin, begin + count), lifespan, NON_CACHEABLE));
     }
 
     public static class Pauser
@@ -1332,13 +1336,13 @@ public class TestSqlTaskExecution
         }
 
         @Override
-        public boolean isRemotelyAccessible()
+        public NodeSelectionStrategy getNodeSelectionStrategy()
         {
-            return true;
+            return NO_PREFERENCE;
         }
 
         @Override
-        public List<HostAddress> getAddresses()
+        public List<HostAddress> getPreferredNodes(List<HostAddress> sortedCandidates)
         {
             return ImmutableList.of();
         }

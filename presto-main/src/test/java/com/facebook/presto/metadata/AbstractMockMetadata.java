@@ -70,7 +70,7 @@ public abstract class AbstractMockMetadata
     }
 
     @Override
-    public List<SqlFunction> listFunctions()
+    public List<SqlFunction> listFunctions(Session session)
     {
         throw new UnsupportedOperationException();
     }
@@ -262,6 +262,12 @@ public abstract class AbstractMockMetadata
     }
 
     @Override
+    public Optional<NewTableLayout> getPreferredShuffleLayoutForNewTable(Session session, String catalogName, ConnectorTableMetadata tableMetadata)
+    {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
     public OutputTableHandle beginCreateTable(Session session, String catalogName, ConnectorTableMetadata tableMetadata, Optional<NewTableLayout> layout)
     {
         throw new UnsupportedOperationException();
@@ -275,6 +281,12 @@ public abstract class AbstractMockMetadata
 
     @Override
     public Optional<NewTableLayout> getInsertLayout(Session session, TableHandle target)
+    {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public Optional<NewTableLayout> getPreferredShuffleLayoutForInsert(Session session, TableHandle target)
     {
         throw new UnsupportedOperationException();
     }
@@ -388,7 +400,7 @@ public abstract class AbstractMockMetadata
     }
 
     @Override
-    public void createView(Session session, QualifiedObjectName viewName, String viewData, boolean replace)
+    public void createView(Session session, String catalogName, ConnectorTableMetadata viewMetadata, String viewData, boolean replace)
     {
         throw new UnsupportedOperationException();
     }

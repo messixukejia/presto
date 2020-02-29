@@ -67,7 +67,6 @@ import com.google.common.collect.ImmutableSet;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.OptionalInt;
 
 import static com.facebook.airlift.json.JsonCodec.jsonCodec;
 import static com.facebook.presto.SessionTestUtils.TEST_SESSION;
@@ -93,24 +92,29 @@ public final class TaskTestUtils
 
     public static final VariableReferenceExpression VARIABLE = new VariableReferenceExpression("column", BIGINT);
 
-    public static final PlanFragment PLAN_FRAGMENT = new PlanFragment(
-            new PlanFragmentId(0),
-            new TableScanNode(
-                    TABLE_SCAN_NODE_ID,
-                    new TableHandle(CONNECTOR_ID, new TestingTableHandle(), TRANSACTION_HANDLE, Optional.empty()),
-                    ImmutableList.of(VARIABLE),
-                    ImmutableMap.of(VARIABLE, new TestingColumnHandle("column", 0, BIGINT)),
-                    TupleDomain.all(),
-                    TupleDomain.all()),
-            ImmutableSet.of(VARIABLE),
-            SOURCE_DISTRIBUTION,
-            ImmutableList.of(TABLE_SCAN_NODE_ID),
-            new PartitioningScheme(Partitioning.create(SINGLE_DISTRIBUTION, ImmutableList.of()), ImmutableList.of(VARIABLE))
-                    .withBucketToPartition(Optional.of(new int[1])),
-            StageExecutionDescriptor.ungroupedExecution(),
-            false,
-            StatsAndCosts.empty(),
-            Optional.empty());
+    public static final PlanFragment PLAN_FRAGMENT = createPlanFragment();
+
+    public static PlanFragment createPlanFragment()
+    {
+        return new PlanFragment(
+                new PlanFragmentId(0),
+                new TableScanNode(
+                        TABLE_SCAN_NODE_ID,
+                        new TableHandle(CONNECTOR_ID, new TestingTableHandle(), TRANSACTION_HANDLE, Optional.empty()),
+                        ImmutableList.of(VARIABLE),
+                        ImmutableMap.of(VARIABLE, new TestingColumnHandle("column", 0, BIGINT)),
+                        TupleDomain.all(),
+                        TupleDomain.all()),
+                ImmutableSet.of(VARIABLE),
+                SOURCE_DISTRIBUTION,
+                ImmutableList.of(TABLE_SCAN_NODE_ID),
+                new PartitioningScheme(Partitioning.create(SINGLE_DISTRIBUTION, ImmutableList.of()), ImmutableList.of(VARIABLE))
+                        .withBucketToPartition(Optional.of(new int[1])),
+                StageExecutionDescriptor.ungroupedExecution(),
+                false,
+                StatsAndCosts.empty(),
+                Optional.empty());
+    }
 
     public static LocalExecutionPlanner createTestingPlanner()
     {
@@ -163,7 +167,7 @@ public final class TaskTestUtils
 
     public static TaskInfo updateTask(SqlTask sqlTask, List<TaskSource> taskSources, OutputBuffers outputBuffers)
     {
-        return sqlTask.updateTask(TEST_SESSION, Optional.of(PLAN_FRAGMENT), taskSources, outputBuffers, OptionalInt.empty(), Optional.of(new TableWriteInfo(Optional.empty(), Optional.empty(), Optional.empty())));
+        return sqlTask.updateTask(TEST_SESSION, Optional.of(PLAN_FRAGMENT), taskSources, outputBuffers, Optional.of(new TableWriteInfo(Optional.empty(), Optional.empty(), Optional.empty())));
     }
 
     public static SplitMonitor createTestSplitMonitor()

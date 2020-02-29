@@ -173,8 +173,9 @@ public class LocalExchange
         ConnectorNodePartitioningProvider partitioningProvider = partitioningProviderManager.getPartitioningProvider(partitioning.getConnectorId().get());
         ConnectorBucketNodeMap connectorBucketNodeMap = partitioningProvider.getBucketNodeMap(
                 partitioning.getTransactionHandle().orElse(null),
-                session.toConnectorSession(),
-                partitioning.getConnectorHandle());
+                session.toConnectorSession(partitioning.getConnectorId().get()),
+                partitioning.getConnectorHandle(),
+                ImmutableList.of());
         checkArgument(connectorBucketNodeMap != null, "No partition map %s", partitioning);
 
         int bucketCount = connectorBucketNodeMap.getBucketCount();

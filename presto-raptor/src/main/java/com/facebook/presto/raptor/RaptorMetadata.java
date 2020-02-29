@@ -16,8 +16,10 @@ package com.facebook.presto.raptor;
 import com.facebook.airlift.json.JsonCodec;
 import com.facebook.airlift.log.Logger;
 import com.facebook.presto.raptor.metadata.ColumnInfo;
+import com.facebook.presto.raptor.metadata.DeltaInfoPair;
 import com.facebook.presto.raptor.metadata.Distribution;
 import com.facebook.presto.raptor.metadata.MetadataDao;
+import com.facebook.presto.raptor.metadata.ShardDeleteDelta;
 import com.facebook.presto.raptor.metadata.ShardDelta;
 import com.facebook.presto.raptor.metadata.ShardInfo;
 import com.facebook.presto.raptor.metadata.ShardManager;
@@ -60,6 +62,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multimaps;
 import io.airlift.slice.Slice;
+import org.skife.jdbi.v2.Handle;
 import org.skife.jdbi.v2.IDBI;
 
 import javax.annotation.Nullable;
@@ -134,6 +137,7 @@ public class RaptorMetadata
 
     private static final JsonCodec<ShardInfo> SHARD_INFO_CODEC = jsonCodec(ShardInfo.class);
     private static final JsonCodec<ShardDelta> SHARD_DELTA_CODEC = jsonCodec(ShardDelta.class);
+    private static final JsonCodec<ShardDeleteDelta> SHARD_DELETE_DELTA_CODEC = jsonCodec(ShardDeleteDelta.class);
 
     private final IDBI dbi;
     private final MetadataDao dao;
@@ -258,7 +262,14 @@ public class RaptorMetadata
             columns.add(hiddenColumn(BUCKET_NUMBER_COLUMN_NAME, INTEGER));
         }
 
+        properties.putAll(getExtraProperties(handle.getTableId()));
+
         return new ConnectorTableMetadata(tableName, columns, properties.build());
+    }
+
+    protected Map<String, Object> getExtraProperties(long tableid)
+    {
+        return ImmutableMap.of();
     }
 
     @Override
@@ -604,7 +615,8 @@ public class RaptorMetadata
                 distribution.map(info -> OptionalInt.of(info.getBucketCount())).orElse(OptionalInt.empty()),
                 distribution.map(DistributionInfo::getBucketColumns).orElse(ImmutableList.of()),
                 organized,
-                isTableSupportsDeltaDelete(tableMetadata.getProperties()));
+                isTableSupportsDeltaDelete(tableMetadata.getProperties()),
+                tableMetadata.getProperties().entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().toString())));
     }
 
     private DistributionInfo getDistributionInfo(long distributionId, Map<String, RaptorColumnHandle> columnHandleMap, Map<String, Object> properties)
@@ -668,6 +680,8 @@ public class RaptorMetadata
             // TODO: update default value of organization_enabled to true
             long tableId = dao.insertTable(table.getSchemaName(), table.getTableName(), true, table.isOrganized(), distributionId, updateTime, table.isTableSupportsDeltaDelete());
 
+            runExtraCreateTableStatement(tableId, dbiHandle, table.getProperties());
+
             List<RaptorColumnHandle> sortColumnHandles = table.getSortColumnHandles();
             List<RaptorColumnHandle> bucketColumnHandles = table.getBucketColumnHandles();
 
@@ -702,6 +716,11 @@ public class RaptorMetadata
         clearRollback();
 
         return Optional.empty();
+    }
+
+    protected void runExtraCreateTableStatement(long tableId, Handle dbiHandle, Map<String, String> extraProperties)
+    {
+        // no-op
     }
 
     @Override
@@ -821,23 +840,35 @@ public class RaptorMetadata
                 .map(RaptorColumnHandle.class::cast)
                 .map(ColumnInfo::fromHandle).collect(toList());
 
-        ImmutableSet.Builder<UUID> oldShardUuidsBuilder = ImmutableSet.builder();
-        ImmutableList.Builder<ShardInfo> newShardsBuilder = ImmutableList.builder();
+        if (table.isTableSupportsDeltaDelete()) {
+            ImmutableMap.Builder<UUID, DeltaInfoPair> shardMapBuilder = ImmutableMap.builder();
 
-        fragments.stream()
-                .map(fragment -> SHARD_DELTA_CODEC.fromJson(fragment.getBytes()))
-                .forEach(delta -> {
-                    oldShardUuidsBuilder.addAll(delta.getOldShardUuids());
-                    newShardsBuilder.addAll(delta.getNewShards());
-                });
+            fragments.stream()
+                    .map(fragment -> SHARD_DELETE_DELTA_CODEC.fromJson(fragment.getBytes()))
+                    .forEach(delta -> shardMapBuilder.put(delta.getOldShardUuid(), delta.getDeltaInfoPair()));
+            OptionalLong updateTime = OptionalLong.of(session.getStartTime());
 
-        Set<UUID> oldShardUuids = oldShardUuidsBuilder.build();
-        List<ShardInfo> newShards = newShardsBuilder.build();
-        OptionalLong updateTime = OptionalLong.of(session.getStartTime());
+            log.info("Finishing delete for tableId %s (affected shardUuid: %s)", tableId, shardMapBuilder.build().size());
+            shardManager.replaceDeltaUuids(transactionId, tableId, columns, shardMapBuilder.build(), updateTime);
+        }
+        else {
+            ImmutableSet.Builder<UUID> oldShardUuidsBuilder = ImmutableSet.builder();
+            ImmutableList.Builder<ShardInfo> newShardsBuilder = ImmutableList.builder();
 
-        log.info("Finishing delete for tableId %s (removed: %s, rewritten: %s)", tableId, oldShardUuids.size() - newShards.size(), newShards.size());
-        shardManager.replaceShardUuids(transactionId, tableId, columns, oldShardUuids, newShards, updateTime);
+            fragments.stream()
+                    .map(fragment -> SHARD_DELTA_CODEC.fromJson(fragment.getBytes()))
+                    .forEach(delta -> {
+                        oldShardUuidsBuilder.addAll(delta.getOldShardUuids());
+                        newShardsBuilder.addAll(delta.getNewShards());
+                    });
 
+            Set<UUID> oldShardUuids = oldShardUuidsBuilder.build();
+            List<ShardInfo> newShards = newShardsBuilder.build();
+            OptionalLong updateTime = OptionalLong.of(session.getStartTime());
+
+            log.info("Finishing delete for tableId %s (removed: %s, rewritten: %s)", tableId, oldShardUuids.size() - newShards.size(), newShards.size());
+            shardManager.replaceShardUuids(transactionId, tableId, columns, oldShardUuids, newShards, updateTime);
+        }
         clearRollback();
     }
 
@@ -848,8 +879,9 @@ public class RaptorMetadata
     }
 
     @Override
-    public void createView(ConnectorSession session, SchemaTableName viewName, String viewData, boolean replace)
+    public void createView(ConnectorSession session, ConnectorTableMetadata viewMetadata, String viewData, boolean replace)
     {
+        SchemaTableName viewName = viewMetadata.getTable();
         String schemaName = viewName.getSchemaName();
         String tableName = viewName.getTableName();
 

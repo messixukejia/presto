@@ -37,7 +37,6 @@ import com.facebook.presto.operator.DeleteOperator.DeleteOperatorFactory;
 import com.facebook.presto.operator.DevNullOperator.DevNullOperatorFactory;
 import com.facebook.presto.operator.DriverFactory;
 import com.facebook.presto.operator.EnforceSingleRowOperator;
-import com.facebook.presto.operator.ExchangeOperator.ExchangeOperatorFactory;
 import com.facebook.presto.operator.ExplainAnalyzeOperator.ExplainAnalyzeOperatorFactory;
 import com.facebook.presto.operator.FilterAndProjectOperator;
 import com.facebook.presto.operator.GroupIdOperator;
@@ -53,7 +52,6 @@ import com.facebook.presto.operator.LookupJoinOperators;
 import com.facebook.presto.operator.LookupOuterOperator.LookupOuterOperatorFactory;
 import com.facebook.presto.operator.LookupSourceFactory;
 import com.facebook.presto.operator.MarkDistinctOperator.MarkDistinctOperatorFactory;
-import com.facebook.presto.operator.MergeOperator.MergeOperatorFactory;
 import com.facebook.presto.operator.MetadataDeleteOperator.MetadataDeleteOperatorFactory;
 import com.facebook.presto.operator.NestedLoopJoinBridge;
 import com.facebook.presto.operator.NestedLoopJoinPagesSupplier;
@@ -81,7 +79,6 @@ import com.facebook.presto.operator.TableFinishOperator.LifespanCommitter;
 import com.facebook.presto.operator.TableScanOperator.TableScanOperatorFactory;
 import com.facebook.presto.operator.TableWriterMergeOperator.TableWriterMergeOperatorFactory;
 import com.facebook.presto.operator.TaskContext;
-import com.facebook.presto.operator.TaskExchangeClientManager;
 import com.facebook.presto.operator.TaskOutputOperator.TaskOutputFactory;
 import com.facebook.presto.operator.TopNOperator.TopNOperatorFactory;
 import com.facebook.presto.operator.TopNRowNumberOperator;
@@ -188,6 +185,7 @@ import com.facebook.presto.sql.planner.plan.WindowNode;
 import com.facebook.presto.sql.planner.plan.WindowNode.Frame;
 import com.facebook.presto.sql.relational.VariableToChannelTranslator;
 import com.facebook.presto.sql.tree.SymbolReference;
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.VerifyException;
 import com.google.common.collect.ContiguousSet;
 import com.google.common.collect.HashMultimap;
@@ -371,32 +369,75 @@ public class LocalExecutionPlanner
     public LocalExecutionPlan plan(
             TaskContext taskContext,
             PlanNode plan,
-            TypeProvider types,
             PartitioningScheme partitioningScheme,
             StageExecutionDescriptor stageExecutionDescriptor,
             List<PlanNodeId> partitionedSourceOrder,
             OutputBuffer outputBuffer,
-            TaskExchangeClientManager taskExchangeClientManager,
+            RemoteSourceFactory remoteSourceFactory,
             TableWriteInfo tableWriteInfo)
     {
-        List<VariableReferenceExpression> outputLayout = partitioningScheme.getOutputLayout();
+        return plan(
+                taskContext,
+                plan,
+                partitioningScheme,
+                stageExecutionDescriptor,
+                partitionedSourceOrder,
+                createOutputFactory(taskContext, partitioningScheme, outputBuffer),
+                remoteSourceFactory,
+                tableWriteInfo);
+    }
 
+    public LocalExecutionPlan plan(
+            TaskContext taskContext,
+            PlanNode plan,
+            PartitioningScheme partitioningScheme,
+            StageExecutionDescriptor stageExecutionDescriptor,
+            List<PlanNodeId> partitionedSourceOrder,
+            OutputFactory outputFactory,
+            RemoteSourceFactory remoteSourceFactory,
+            TableWriteInfo tableWriteInfo)
+    {
+        return plan(
+                taskContext,
+                stageExecutionDescriptor,
+                plan,
+                partitioningScheme.getOutputLayout(),
+                partitionedSourceOrder,
+                outputFactory,
+                createOutputPartitioning(taskContext, partitioningScheme),
+                remoteSourceFactory,
+                tableWriteInfo);
+    }
+
+    private OutputFactory createOutputFactory(TaskContext taskContext, PartitioningScheme partitioningScheme, OutputBuffer outputBuffer)
+    {
         if (partitioningScheme.getPartitioning().getHandle().equals(FIXED_BROADCAST_DISTRIBUTION) ||
                 partitioningScheme.getPartitioning().getHandle().equals(FIXED_ARBITRARY_DISTRIBUTION) ||
                 partitioningScheme.getPartitioning().getHandle().equals(SCALED_WRITER_DISTRIBUTION) ||
                 partitioningScheme.getPartitioning().getHandle().equals(SINGLE_DISTRIBUTION) ||
                 partitioningScheme.getPartitioning().getHandle().equals(COORDINATOR_DISTRIBUTION)) {
-            return plan(
-                    taskContext,
-                    stageExecutionDescriptor,
-                    plan,
-                    outputLayout,
-                    types,
-                    partitionedSourceOrder,
-                    new TaskOutputFactory(outputBuffer),
-                    taskExchangeClientManager,
-                    tableWriteInfo);
+            return new TaskOutputFactory(outputBuffer);
         }
+
+        if (isOptimizedRepartitioningEnabled(taskContext.getSession())) {
+            return new OptimizedPartitionedOutputFactory(outputBuffer, maxPagePartitioningBufferSize);
+        }
+        else {
+            return new PartitionedOutputFactory(outputBuffer, maxPagePartitioningBufferSize);
+        }
+    }
+
+    private Optional<OutputPartitioning> createOutputPartitioning(TaskContext taskContext, PartitioningScheme partitioningScheme)
+    {
+        if (partitioningScheme.getPartitioning().getHandle().equals(FIXED_BROADCAST_DISTRIBUTION) ||
+                partitioningScheme.getPartitioning().getHandle().equals(FIXED_ARBITRARY_DISTRIBUTION) ||
+                partitioningScheme.getPartitioning().getHandle().equals(SCALED_WRITER_DISTRIBUTION) ||
+                partitioningScheme.getPartitioning().getHandle().equals(SINGLE_DISTRIBUTION) ||
+                partitioningScheme.getPartitioning().getHandle().equals(COORDINATOR_DISTRIBUTION)) {
+            return Optional.empty();
+        }
+
+        List<VariableReferenceExpression> outputLayout = partitioningScheme.getOutputLayout();
 
         // We can convert the variables directly into channels, because the root must be a sink and therefore the layout is fixed
         List<Integer> partitionChannels;
@@ -416,7 +457,7 @@ public class LocalExecutionPlanner
                         if (argument instanceof ConstantExpression) {
                             return -1;
                         }
-                        return outputLayout.indexOf((VariableReferenceExpression) argument);
+                        return outputLayout.indexOf(argument);
                     })
                     .collect(toImmutableList());
             partitionConstants = partitioningScheme.getPartitioning().getArguments().stream()
@@ -442,55 +483,24 @@ public class LocalExecutionPlanner
             nullChannel = OptionalInt.of(outputLayout.indexOf(getOnlyElement(partitioningColumns)));
         }
 
-        OutputFactory outputFactory;
-        if (isOptimizedRepartitioningEnabled(taskContext.getSession())) {
-            outputFactory = new OptimizedPartitionedOutputFactory(
-                    partitionFunction,
-                    partitionChannels,
-                    partitionConstants,
-                    partitioningScheme.isReplicateNullsAndAny(),
-                    nullChannel,
-                    outputBuffer,
-                    maxPagePartitioningBufferSize);
-        }
-        else {
-            outputFactory = new PartitionedOutputFactory(
-                    partitionFunction,
-                    partitionChannels,
-                    partitionConstants,
-                    partitioningScheme.isReplicateNullsAndAny(),
-                    nullChannel,
-                    outputBuffer,
-                    maxPagePartitioningBufferSize);
-        }
-
-        return plan(
-                taskContext,
-                stageExecutionDescriptor,
-                plan,
-                outputLayout,
-                types,
-                partitionedSourceOrder,
-                outputFactory,
-                taskExchangeClientManager,
-                tableWriteInfo);
+        return Optional.of(new OutputPartitioning(partitionFunction, partitionChannels, partitionConstants, partitioningScheme.isReplicateNullsAndAny(), nullChannel));
     }
 
+    @VisibleForTesting
     public LocalExecutionPlan plan(
             TaskContext taskContext,
             StageExecutionDescriptor stageExecutionDescriptor,
             PlanNode plan,
             List<VariableReferenceExpression> outputLayout,
-            TypeProvider types,
             List<PlanNodeId> partitionedSourceOrder,
             OutputFactory outputOperatorFactory,
-            TaskExchangeClientManager taskExchangeClientManager,
+            Optional<OutputPartitioning> outputPartitioning,
+            RemoteSourceFactory remoteSourceFactory,
             TableWriteInfo tableWriteInfo)
     {
         Session session = taskContext.getSession();
-        LocalExecutionPlanContext context = new LocalExecutionPlanContext(taskContext, taskExchangeClientManager, tableWriteInfo);
-
-        PhysicalOperation physicalOperation = plan.accept(new Visitor(session, stageExecutionDescriptor), context);
+        LocalExecutionPlanContext context = new LocalExecutionPlanContext(taskContext, tableWriteInfo);
+        PhysicalOperation physicalOperation = plan.accept(new Visitor(session, stageExecutionDescriptor, remoteSourceFactory), context);
 
         Function<Page, Page> pagePreprocessor = enforceLayoutProcessor(outputLayout, physicalOperation.getLayout());
 
@@ -508,6 +518,7 @@ public class LocalExecutionPlanner
                                 plan.getId(),
                                 outputTypes,
                                 pagePreprocessor,
+                                outputPartitioning,
                                 new PagesSerdeFactory(blockEncodingSerde, isExchangeCompressionEnabled(session))))
                         .build(),
                 context.getDriverInstanceCount(),
@@ -559,7 +570,6 @@ public class LocalExecutionPlanner
     private static class LocalExecutionPlanContext
     {
         private final TaskContext taskContext;
-        private final TaskExchangeClientManager taskExchangeClientManager;
         private final List<DriverFactory> driverFactories;
         private final Optional<IndexSourceContext> indexSourceContext;
 
@@ -571,24 +581,19 @@ public class LocalExecutionPlanner
         private boolean inputDriver = true;
         private OptionalInt driverInstanceCount = OptionalInt.empty();
 
-        public LocalExecutionPlanContext(
-                TaskContext taskContext,
-                TaskExchangeClientManager taskExchangeClientManager,
-                TableWriteInfo tableWriteInfo)
+        public LocalExecutionPlanContext(TaskContext taskContext, TableWriteInfo tableWriteInfo)
         {
-            this(taskContext, taskExchangeClientManager, new ArrayList<>(), Optional.empty(), new AtomicInteger(0), tableWriteInfo);
+            this(taskContext, new ArrayList<>(), Optional.empty(), new AtomicInteger(0), tableWriteInfo);
         }
 
         private LocalExecutionPlanContext(
                 TaskContext taskContext,
-                TaskExchangeClientManager taskExchangeClientManager,
                 List<DriverFactory> driverFactories,
                 Optional<IndexSourceContext> indexSourceContext,
                 AtomicInteger nextPipelineId,
                 TableWriteInfo tableWriteInfo)
         {
             this.taskContext = taskContext;
-            this.taskExchangeClientManager = taskExchangeClientManager;
             this.driverFactories = driverFactories;
             this.indexSourceContext = indexSourceContext;
             this.nextPipelineId = nextPipelineId;
@@ -624,11 +629,6 @@ public class LocalExecutionPlanner
             return taskContext.getTaskId().getStageExecutionId();
         }
 
-        public TaskExchangeClientManager getTaskExchangeClientManager()
-        {
-            return taskExchangeClientManager;
-        }
-
         public Optional<IndexSourceContext> getIndexSourceContext()
         {
             return indexSourceContext;
@@ -662,12 +662,12 @@ public class LocalExecutionPlanner
         public LocalExecutionPlanContext createSubContext()
         {
             checkState(!indexSourceContext.isPresent(), "index build plan can not have sub-contexts");
-            return new LocalExecutionPlanContext(taskContext, taskExchangeClientManager, driverFactories, indexSourceContext, nextPipelineId, tableWriteInfo);
+            return new LocalExecutionPlanContext(taskContext, driverFactories, indexSourceContext, nextPipelineId, tableWriteInfo);
         }
 
         public LocalExecutionPlanContext createIndexSourceSubContext(IndexSourceContext indexSourceContext)
         {
-            return new LocalExecutionPlanContext(taskContext, taskExchangeClientManager, driverFactories, Optional.of(indexSourceContext), nextPipelineId, tableWriteInfo);
+            return new LocalExecutionPlanContext(taskContext, driverFactories, Optional.of(indexSourceContext), nextPipelineId, tableWriteInfo);
         }
 
         public OptionalInt getDriverInstanceCount()
@@ -734,11 +734,13 @@ public class LocalExecutionPlanner
     {
         private final Session session;
         private final StageExecutionDescriptor stageExecutionDescriptor;
+        private final RemoteSourceFactory remoteSourceFactory;
 
-        private Visitor(Session session, StageExecutionDescriptor stageExecutionDescriptor)
+        private Visitor(Session session, StageExecutionDescriptor stageExecutionDescriptor, RemoteSourceFactory remoteSourceFactory)
         {
-            this.session = session;
-            this.stageExecutionDescriptor = stageExecutionDescriptor;
+            this.session = requireNonNull(session, "session is null");
+            this.stageExecutionDescriptor = requireNonNull(stageExecutionDescriptor, "stageExecutionDescriptor is null");
+            this.remoteSourceFactory = requireNonNull(remoteSourceFactory, "remoteSourceFactory is null");
         }
 
         @Override
@@ -768,12 +770,10 @@ public class LocalExecutionPlanner
                     .boxed()
                     .collect(toImmutableList());
 
-            OperatorFactory operatorFactory = new MergeOperatorFactory(
+            OperatorFactory operatorFactory = remoteSourceFactory.createMergeRemoteSource(
+                    session,
                     context.getNextOperatorId(),
                     node.getId(),
-                    context.getTaskExchangeClientManager(),
-                    new PagesSerdeFactory(blockEncodingSerde, isExchangeCompressionEnabled(session)),
-                    orderingCompiler,
                     types,
                     outputChannels,
                     sortChannels,
@@ -791,11 +791,11 @@ public class LocalExecutionPlanner
                 context.setDriverInstanceCount(getTaskConcurrency(session));
             }
 
-            OperatorFactory operatorFactory = new ExchangeOperatorFactory(
+            OperatorFactory operatorFactory = remoteSourceFactory.createRemoteSource(
+                    session,
                     context.getNextOperatorId(),
                     node.getId(),
-                    context.getTaskExchangeClientManager(),
-                    new PagesSerdeFactory(blockEncodingSerde, isExchangeCompressionEnabled(session)));
+                    getSourceOperatorTypes(node));
 
             return new PhysicalOperation(operatorFactory, makeLayout(node), context, UNGROUPED_EXECUTION);
         }
@@ -2213,7 +2213,7 @@ public class LocalExecutionPlanner
         public PhysicalOperation visitTableWriter(TableWriterNode node, LocalExecutionPlanContext context)
         {
             // Set table writer count
-            if (node.getPartitioningScheme().isPresent()) {
+            if (node.getTablePartitioningScheme().isPresent()) {
                 context.setDriverInstanceCount(getTaskPartitionedWriterCount(session));
             }
             else {

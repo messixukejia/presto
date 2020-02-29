@@ -19,6 +19,7 @@ import com.facebook.presto.hive.HdfsEnvironment;
 import com.facebook.presto.hive.HiveBatchPageSourceFactory;
 import com.facebook.presto.hive.HiveClientConfig;
 import com.facebook.presto.hive.HiveColumnHandle;
+import com.facebook.presto.hive.HiveFileContext;
 import com.facebook.presto.hive.metastore.Storage;
 import com.facebook.presto.memory.context.AggregatedMemoryContext;
 import com.facebook.presto.orc.OrcBatchRecordReader;
@@ -143,7 +144,7 @@ public class OrcBatchPageSourceFactory
             List<HiveColumnHandle> columns,
             TupleDomain<HiveColumnHandle> effectivePredicate,
             DateTimeZone hiveStorageTimeZone,
-            Optional<byte[]> extraFileInfo)
+            HiveFileContext hiveFileContext)
     {
         if (!OrcSerde.class.getName().equals(storage.getStorageFormat().getSerDe())) {
             return Optional.empty();
@@ -176,7 +177,7 @@ public class OrcBatchPageSourceFactory
                 domainCompactionThreshold,
                 orcFileTailSource,
                 stripeMetadataSource,
-                extraFileInfo,
+                hiveFileContext,
                 fileOpener,
                 new OrcReaderOptions(
                         getOrcMaxMergeDistance(session),
@@ -207,7 +208,7 @@ public class OrcBatchPageSourceFactory
             int domainCompactionThreshold,
             OrcFileTailSource orcFileTailSource,
             StripeMetadataSource stripeMetadataSource,
-            Optional<byte[]> extraFileInfo,
+            HiveFileContext hiveFileContext,
             FileOpener fileOpener,
             OrcReaderOptions orcReaderOptions)
     {
@@ -216,7 +217,7 @@ public class OrcBatchPageSourceFactory
         OrcDataSource orcDataSource;
         try {
             FileSystem fileSystem = hdfsEnvironment.getFileSystem(sessionUser, path, configuration);
-            FSDataInputStream inputStream = fileOpener.open(fileSystem, path, extraFileInfo);
+            FSDataInputStream inputStream = fileOpener.open(fileSystem, path, hiveFileContext);
             orcDataSource = new HdfsOrcDataSource(
                     new OrcDataSourceId(path.toString()),
                     fileSize,
@@ -237,7 +238,7 @@ public class OrcBatchPageSourceFactory
 
         AggregatedMemoryContext systemMemoryUsage = newSimpleAggregatedMemoryContext();
         try {
-            OrcReader reader = new OrcReader(orcDataSource, orcEncoding, orcFileTailSource, stripeMetadataSource, orcReaderOptions);
+            OrcReader reader = new OrcReader(orcDataSource, orcEncoding, orcFileTailSource, stripeMetadataSource, orcReaderOptions, hiveFileContext);
 
             List<HiveColumnHandle> physicalColumns = getPhysicalHiveColumnHandles(columns, useOrcColumnNames, reader, path);
             ImmutableMap.Builder<Integer, Type> includedColumns = ImmutableMap.builder();
@@ -259,7 +260,8 @@ public class OrcBatchPageSourceFactory
                     length,
                     hiveStorageTimeZone,
                     systemMemoryUsage,
-                    INITIAL_BATCH_SIZE);
+                    INITIAL_BATCH_SIZE,
+                    hiveFileContext);
 
             return new OrcBatchPageSource(
                     recordReader,

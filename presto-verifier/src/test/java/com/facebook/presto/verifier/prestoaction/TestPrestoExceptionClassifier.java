@@ -18,7 +18,6 @@ import com.facebook.presto.spi.ErrorCodeSupplier;
 import com.facebook.presto.spi.PrestoException;
 import com.facebook.presto.verifier.framework.QueryException;
 import com.facebook.presto.verifier.framework.QueryStage;
-import com.google.common.collect.ImmutableSet;
 import org.testng.annotations.Test;
 
 import java.io.EOFException;
@@ -31,7 +30,7 @@ import java.sql.SQLException;
 import java.util.Optional;
 
 import static com.facebook.presto.hive.HiveErrorCode.HIVE_CANNOT_OPEN_SPLIT;
-import static com.facebook.presto.hive.MetastoreErrorCode.HIVE_CORRUPTED_COLUMN_STATISTICS;
+import static com.facebook.presto.hive.HiveErrorCode.HIVE_CORRUPTED_COLUMN_STATISTICS;
 import static com.facebook.presto.spi.StandardErrorCode.EXCEEDED_TIME_LIMIT;
 import static com.facebook.presto.spi.StandardErrorCode.FUNCTION_IMPLEMENTATION_ERROR;
 import static com.facebook.presto.spi.StandardErrorCode.NO_NODES_AVAILABLE;
@@ -47,7 +46,7 @@ public class TestPrestoExceptionClassifier
     private static final QueryStage QUERY_STAGE = CONTROL_MAIN;
     private static final QueryStats QUERY_STATS = new QueryStats("id", "", false, false, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, Optional.empty());
 
-    private final SqlExceptionClassifier classifier = new PrestoExceptionClassifier(ImmutableSet.of(), ImmutableSet.of());
+    private final SqlExceptionClassifier classifier = PrestoExceptionClassifier.createDefault();
 
     @Test
     public void testNetworkException()

@@ -17,6 +17,7 @@ import com.facebook.presto.hive.metastore.Column;
 import com.facebook.presto.hive.metastore.Storage;
 import com.facebook.presto.spi.ConnectorSplit;
 import com.facebook.presto.spi.HostAddress;
+import com.facebook.presto.spi.schedule.NodeSelectionStrategy;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.collect.ImmutableList;
@@ -28,6 +29,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
 
+import static com.facebook.presto.spi.schedule.NodeSelectionStrategy.SOFT_AFFINITY;
 import static com.google.common.base.MoreObjects.toStringHelper;
 import static com.google.common.base.Preconditions.checkArgument;
 import static java.util.Objects.requireNonNull;
@@ -47,7 +49,7 @@ public class HiveSplit
     private final String partitionName;
     private final OptionalInt readBucketNumber;
     private final OptionalInt tableBucketNumber;
-    private final boolean forceLocalScheduling;
+    private final NodeSelectionStrategy nodeSelectionStrategy;
     private final int partitionDataColumnCount;
     private final Map<Integer, Column> partitionSchemaDifference; // key: hiveColumnIndex
     private final Optional<BucketConversion> bucketConversion;
@@ -68,7 +70,7 @@ public class HiveSplit
             @JsonProperty("addresses") List<HostAddress> addresses,
             @JsonProperty("readBucketNumber") OptionalInt readBucketNumber,
             @JsonProperty("tableBucketNumber") OptionalInt tableBucketNumber,
-            @JsonProperty("forceLocalScheduling") boolean forceLocalScheduling,
+            @JsonProperty("nodeSelectionStrategy") NodeSelectionStrategy nodeSelectionStrategy,
             @JsonProperty("partitionDataColumnCount") int partitionDataColumnCount,
             @JsonProperty("partitionSchemaDifference") Map<Integer, Column> partitionSchemaDifference,
             @JsonProperty("bucketConversion") Optional<BucketConversion> bucketConversion,
@@ -87,6 +89,7 @@ public class HiveSplit
         requireNonNull(addresses, "addresses is null");
         requireNonNull(readBucketNumber, "readBucketNumber is null");
         requireNonNull(tableBucketNumber, "tableBucketNumber is null");
+        requireNonNull(nodeSelectionStrategy, "nodeSelectionStrategy is null");
         requireNonNull(partitionSchemaDifference, "partitionSchemaDifference is null");
         requireNonNull(bucketConversion, "bucketConversion is null");
         requireNonNull(extraFileInfo, "extraFileInfo is null");
@@ -103,7 +106,7 @@ public class HiveSplit
         this.addresses = ImmutableList.copyOf(addresses);
         this.readBucketNumber = readBucketNumber;
         this.tableBucketNumber = tableBucketNumber;
-        this.forceLocalScheduling = forceLocalScheduling;
+        this.nodeSelectionStrategy = nodeSelectionStrategy;
         this.partitionDataColumnCount = partitionDataColumnCount;
         this.partitionSchemaDifference = partitionSchemaDifference;
         this.bucketConversion = bucketConversion;
@@ -166,9 +169,27 @@ public class HiveSplit
     }
 
     @JsonProperty
-    @Override
     public List<HostAddress> getAddresses()
     {
+        return addresses;
+    }
+
+    @Override
+    public List<HostAddress> getPreferredNodes(List<HostAddress> sortedCandidates)
+    {
+        if (sortedCandidates == null || sortedCandidates.isEmpty()) {
+            throw new RuntimeException("sortedCandidates is null or empty for HiveSplit");
+        }
+
+        if (getNodeSelectionStrategy() == SOFT_AFFINITY) {
+            // Use + 1 as secondary hash for now, would always get a different position from the first hash.
+            int size = sortedCandidates.size();
+            int mod = path.hashCode() % size;
+            int position = mod < 0 ? mod + size : mod;
+            return ImmutableList.of(
+                    sortedCandidates.get(position),
+                    sortedCandidates.get((position + 1) % size));
+        }
         return addresses;
     }
 
@@ -182,12 +203,6 @@ public class HiveSplit
     public OptionalInt getTableBucketNumber()
     {
         return tableBucketNumber;
-    }
-
-    @JsonProperty
-    public boolean isForceLocalScheduling()
-    {
-        return forceLocalScheduling;
     }
 
     @JsonProperty
@@ -208,10 +223,11 @@ public class HiveSplit
         return bucketConversion;
     }
 
+    @JsonProperty
     @Override
-    public boolean isRemotelyAccessible()
+    public NodeSelectionStrategy getNodeSelectionStrategy()
     {
-        return !forceLocalScheduling;
+        return nodeSelectionStrategy;
     }
 
     @JsonProperty
@@ -237,7 +253,7 @@ public class HiveSplit
                 .put("hosts", addresses)
                 .put("database", database)
                 .put("table", table)
-                .put("forceLocalScheduling", forceLocalScheduling)
+                .put("nodeSelectionStrategy", nodeSelectionStrategy)
                 .put("partitionName", partitionName)
                 .put("s3SelectPushdownEnabled", s3SelectPushdownEnabled)
                 .build();

@@ -16,6 +16,7 @@ package com.facebook.presto.hive;
 import com.facebook.presto.hive.HiveSplit.BucketConversion;
 import com.facebook.presto.hive.metastore.Column;
 import com.facebook.presto.spi.HostAddress;
+import com.facebook.presto.spi.schedule.NodeSelectionStrategy;
 import com.google.common.collect.ImmutableList;
 import org.apache.hadoop.fs.Path;
 import org.openjdk.jol.info.ClassLayout;
@@ -59,7 +60,7 @@ public class InternalHiveSplit
     private final int tableBucketNumber;
 
     private final boolean splittable;
-    private final boolean forceLocalScheduling;
+    private final NodeSelectionStrategy nodeSelectionStrategy;
     private final boolean s3SelectPushdownEnabled;
     private final HiveSplitPartitionInfo partitionInfo;
     private final Optional<byte[]> extraFileInfo;
@@ -76,7 +77,7 @@ public class InternalHiveSplit
             OptionalInt readBucketNumber,
             OptionalInt tableBucketNumber,
             boolean splittable,
-            boolean forceLocalScheduling,
+            NodeSelectionStrategy nodeSelectionStrategy,
             boolean s3SelectPushdownEnabled,
             HiveSplitPartitionInfo partitionInfo,
             Optional<byte[]> extraFileInfo)
@@ -87,6 +88,7 @@ public class InternalHiveSplit
         requireNonNull(relativeUri, "relativeUri is null");
         requireNonNull(readBucketNumber, "readBucketNumber is null");
         requireNonNull(tableBucketNumber, "tableBucketNumber is null");
+        requireNonNull(nodeSelectionStrategy, "nodeSelectionStrategy is null");
         requireNonNull(partitionInfo, "partitionInfo is null");
         requireNonNull(extraFileInfo, "extraFileInfo is null");
 
@@ -97,7 +99,7 @@ public class InternalHiveSplit
         this.readBucketNumber = readBucketNumber.orElse(-1);
         this.tableBucketNumber = tableBucketNumber.orElse(-1);
         this.splittable = splittable;
-        this.forceLocalScheduling = forceLocalScheduling;
+        this.nodeSelectionStrategy = nodeSelectionStrategy;
         this.s3SelectPushdownEnabled = s3SelectPushdownEnabled;
         this.partitionInfo = partitionInfo;
         this.extraFileInfo = extraFileInfo;
@@ -166,9 +168,9 @@ public class InternalHiveSplit
         return splittable;
     }
 
-    public boolean isForceLocalScheduling()
+    public NodeSelectionStrategy getNodeSelectionStrategy()
     {
-        return forceLocalScheduling;
+        return nodeSelectionStrategy;
     }
 
     public Map<Integer, Column> getPartitionSchemaDifference()

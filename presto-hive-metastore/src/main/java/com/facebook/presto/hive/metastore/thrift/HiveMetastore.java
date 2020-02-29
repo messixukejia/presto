@@ -13,12 +13,14 @@
  */
 package com.facebook.presto.hive.metastore.thrift;
 
+import com.facebook.presto.hive.metastore.Column;
 import com.facebook.presto.hive.metastore.HivePrivilegeInfo;
 import com.facebook.presto.hive.metastore.PartitionStatistics;
 import com.facebook.presto.hive.metastore.PartitionWithStatistics;
 import com.facebook.presto.spi.PrestoException;
 import com.facebook.presto.spi.SchemaTableName;
 import com.facebook.presto.spi.TableNotFoundException;
+import com.facebook.presto.spi.predicate.Domain;
 import com.facebook.presto.spi.security.PrestoPrincipal;
 import com.facebook.presto.spi.security.RoleGrant;
 import com.facebook.presto.spi.statistics.ColumnStatisticType;
@@ -34,7 +36,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 
-import static com.facebook.presto.hive.MetastoreErrorCode.HIVE_INVALID_METADATA;
+import static com.facebook.presto.hive.HiveErrorCode.HIVE_INVALID_METADATA;
 
 public interface HiveMetastore
 {
@@ -67,6 +69,8 @@ public interface HiveMetastore
     Optional<List<String>> getPartitionNames(String databaseName, String tableName);
 
     Optional<List<String>> getPartitionNamesByParts(String databaseName, String tableName, List<String> parts);
+
+    List<String> getPartitionNamesByFilter(String databaseName, String tableName, Map<Column, Domain> partitionPredicates);
 
     Optional<Partition> getPartition(String databaseName, String tableName, List<String> partitionValues);
 

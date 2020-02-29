@@ -45,6 +45,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import static com.facebook.presto.hive.HiveFileContext.DEFAULT_HIVE_FILE_CONTEXT;
 import static com.facebook.presto.memory.context.AggregatedMemoryContext.newSimpleAggregatedMemoryContext;
 import static com.facebook.presto.orc.OrcEncoding.ORC;
 import static com.facebook.presto.orc.OrcTester.HIVE_STORAGE_TIME_ZONE;
@@ -273,12 +274,19 @@ public class TestStructBatchStreamReader
                         dataSize,
                         dataSize,
                         dataSize,
-                        false));
+                        false),
+                DEFAULT_HIVE_FILE_CONTEXT);
 
         Map<Integer, Type> includedColumns = new HashMap<>();
         includedColumns.put(0, readerType);
 
-        OrcBatchRecordReader recordReader = orcReader.createBatchRecordReader(includedColumns, OrcPredicate.TRUE, UTC, newSimpleAggregatedMemoryContext(), OrcReader.INITIAL_BATCH_SIZE);
+        OrcBatchRecordReader recordReader = orcReader.createBatchRecordReader(
+                includedColumns,
+                OrcPredicate.TRUE,
+                UTC,
+                newSimpleAggregatedMemoryContext(),
+                OrcReader.INITIAL_BATCH_SIZE,
+                DEFAULT_HIVE_FILE_CONTEXT);
 
         recordReader.nextBatch();
         RowBlock block = (RowBlock) recordReader.readBlock(0);

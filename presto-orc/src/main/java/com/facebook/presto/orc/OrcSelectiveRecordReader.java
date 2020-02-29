@@ -13,10 +13,12 @@
  */
 package com.facebook.presto.orc;
 
+import com.facebook.presto.hive.HiveFileContext;
 import com.facebook.presto.memory.context.AggregatedMemoryContext;
 import com.facebook.presto.orc.TupleDomainFilter.BigintMultiRange;
 import com.facebook.presto.orc.TupleDomainFilter.BigintRange;
-import com.facebook.presto.orc.TupleDomainFilter.BigintValues;
+import com.facebook.presto.orc.TupleDomainFilter.BigintValuesUsingBitmask;
+import com.facebook.presto.orc.TupleDomainFilter.BigintValuesUsingHashTable;
 import com.facebook.presto.orc.metadata.MetadataReader;
 import com.facebook.presto.orc.metadata.OrcType;
 import com.facebook.presto.orc.metadata.PostScript;
@@ -160,6 +162,7 @@ public class OrcSelectiveRecordReader
             Optional<OrcDecompressor> decompressor,
             int rowsInRowGroup,
             DateTimeZone hiveStorageTimeZone,
+            boolean legacyMapSubscript,
             PostScript.HiveWriterVersion hiveWriterVersion,
             MetadataReader metadataReader,
             DataSize maxMergeDistance,
@@ -169,13 +172,15 @@ public class OrcSelectiveRecordReader
             AggregatedMemoryContext systemMemoryUsage,
             Optional<OrcWriteValidation> writeValidation,
             int initialBatchSize,
-            StripeMetadataSource stripeMetadataSource)
+            StripeMetadataSource stripeMetadataSource,
+            HiveFileContext hiveFileContext)
     {
         super(includedColumns,
                 createStreamReaders(
                         orcDataSource,
                         types,
                         hiveStorageTimeZone,
+                        legacyMapSubscript,
                         includedColumns,
                         outputColumns,
                         filters,
@@ -204,7 +209,8 @@ public class OrcSelectiveRecordReader
                 systemMemoryUsage,
                 writeValidation,
                 initialBatchSize,
-                stripeMetadataSource);
+                stripeMetadataSource,
+                hiveFileContext);
 
         // Hive column indices can't be used to index into arrays because they are negative
         // for partition and hidden columns. Hence, we create synthetic zero-based indices.
@@ -472,7 +478,7 @@ public class OrcSelectiveRecordReader
             return 50;
         }
 
-        if (filter instanceof BigintValues || filter instanceof BigintMultiRange) {
+        if (filter instanceof BigintValuesUsingHashTable || filter instanceof BigintValuesUsingBitmask || filter instanceof BigintMultiRange) {
             return 50;
         }
 
@@ -552,6 +558,7 @@ public class OrcSelectiveRecordReader
             OrcDataSource orcDataSource,
             List<OrcType> types,
             DateTimeZone hiveStorageTimeZone,
+            boolean legacyMapSubscript,
             Map<Integer, Type> includedColumns,
             List<Integer> outputColumns,
             Map<Integer, Map<Subfield, TupleDomainFilter>> filters,
@@ -583,6 +590,7 @@ public class OrcSelectiveRecordReader
                         outputRequired ? Optional.of(includedColumns.get(columnId)) : Optional.empty(),
                         Optional.ofNullable(requiredSubfields.get(columnId)).orElse(ImmutableList.of()),
                         hiveStorageTimeZone,
+                        legacyMapSubscript,
                         systemMemoryContext);
             }
         }

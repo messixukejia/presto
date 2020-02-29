@@ -15,12 +15,10 @@ package com.facebook.presto.plugin.geospatial;
 
 import com.esri.core.geometry.Envelope;
 import com.esri.core.geometry.GeometryCursor;
+import com.esri.core.geometry.GeometryException;
 import com.esri.core.geometry.ListeningGeometryCursor;
 import com.esri.core.geometry.MultiPath;
-import com.esri.core.geometry.MultiVertexGeometry;
-import com.esri.core.geometry.NonSimpleResult;
 import com.esri.core.geometry.NonSimpleResult.Reason;
-import com.esri.core.geometry.OperatorSimplifyOGC;
 import com.esri.core.geometry.OperatorUnion;
 import com.esri.core.geometry.Point;
 import com.esri.core.geometry.Polygon;
@@ -42,6 +40,7 @@ import com.facebook.presto.spi.function.ScalarFunction;
 import com.facebook.presto.spi.function.SqlNullable;
 import com.facebook.presto.spi.function.SqlType;
 import com.facebook.presto.spi.type.IntegerType;
+import com.facebook.presto.spi.type.KdbTreeType;
 import com.google.common.base.Joiner;
 import com.google.common.base.VerifyException;
 import com.google.common.collect.ImmutableList;
@@ -49,11 +48,14 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import io.airlift.slice.BasicSliceInput;
 import io.airlift.slice.Slice;
+import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.CoordinateSequence;
 import org.locationtech.jts.geom.Geometry;
 import org.locationtech.jts.geom.GeometryCollection;
+import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.geom.LineString;
 import org.locationtech.jts.geom.MultiLineString;
+import org.locationtech.jts.geom.TopologyException;
 import org.locationtech.jts.geom.impl.PackedCoordinateSequenceFactory;
 import org.locationtech.jts.linearref.LengthIndexedLine;
 
@@ -89,6 +91,7 @@ import static com.facebook.presto.geospatial.GeometryUtils.createJtsEmptyPolygon
 import static com.facebook.presto.geospatial.GeometryUtils.createJtsLineString;
 import static com.facebook.presto.geospatial.GeometryUtils.createJtsMultiPoint;
 import static com.facebook.presto.geospatial.GeometryUtils.createJtsPoint;
+import static com.facebook.presto.geospatial.GeometryUtils.getGeometryInvalidReason;
 import static com.facebook.presto.geospatial.GeometryUtils.getPointCount;
 import static com.facebook.presto.geospatial.GeometryUtils.jtsGeometryFromWkt;
 import static com.facebook.presto.geospatial.GeometryUtils.wktFromJtsGeometry;
@@ -324,7 +327,12 @@ public final class GeoFunctions
     @SqlType(VARBINARY)
     public static Slice stAsBinary(@SqlType(GEOMETRY_TYPE_NAME) Slice input)
     {
-        return wrappedBuffer(EsriGeometrySerde.deserialize(input).asBinary());
+        try {
+            return wrappedBuffer(EsriGeometrySerde.deserialize(input).asBinary());
+        }
+        catch (GeometryException e) {
+            throw new PrestoException(INVALID_FUNCTION_ARGUMENT, "Invalid geometry: " + e.getMessage(), e);
+        }
     }
 
     @SqlNullable
@@ -345,11 +353,11 @@ public final class GeoFunctions
             return input;
         }
 
-        OGCGeometry geometry = EsriGeometrySerde.deserialize(input);
+        Geometry geometry = deserialize(input);
         if (geometry.isEmpty()) {
             return null;
         }
-        return EsriGeometrySerde.serialize(geometry.buffer(distance));
+        return serialize(geometry.buffer(distance));
     }
 
     @Description("Returns the Point value that is the mathematical centroid of a Geometry")
@@ -434,8 +442,15 @@ public final class GeoFunctions
     @SqlType(BOOLEAN)
     public static boolean stIsSimple(@SqlType(GEOMETRY_TYPE_NAME) Slice input)
     {
-        OGCGeometry geometry = EsriGeometrySerde.deserialize(input);
-        return geometry.isEmpty() || geometry.isSimple();
+        try {
+            return deserialize(input).isSimple();
+        }
+        catch (PrestoException e) {
+            if (e.getCause() instanceof TopologyException) {
+                return false;
+            }
+            throw e;
+        }
     }
 
     @Description("Returns true if the input geometry is well formed")
@@ -443,16 +458,14 @@ public final class GeoFunctions
     @SqlType(BOOLEAN)
     public static boolean stIsValid(@SqlType(GEOMETRY_TYPE_NAME) Slice input)
     {
-        GeometryCursor cursor = EsriGeometrySerde.deserialize(input).getEsriGeometryCursor();
-        while (true) {
-            com.esri.core.geometry.Geometry geometry = cursor.next();
-            if (geometry == null) {
-                return true;
-            }
-
-            if (!OperatorSimplifyOGC.local().isSimpleOGC(geometry, null, true, null, null)) {
+        try {
+            return deserialize(input).isValid();
+        }
+        catch (PrestoException e) {
+            if (e.getCause() instanceof TopologyException) {
                 return false;
             }
+            throw e;
         }
     }
 
@@ -462,35 +475,15 @@ public final class GeoFunctions
     @SqlNullable
     public static Slice invalidReason(@SqlType(GEOMETRY_TYPE_NAME) Slice input)
     {
-        GeometryCursor cursor = EsriGeometrySerde.deserialize(input).getEsriGeometryCursor();
-        NonSimpleResult result = new NonSimpleResult();
-        while (true) {
-            com.esri.core.geometry.Geometry geometry = cursor.next();
-            if (geometry == null) {
-                return null;
+        try {
+            Geometry geometry = deserialize(input);
+            return utf8Slice(getGeometryInvalidReason(geometry));
+        }
+        catch (PrestoException e) {
+            if (e.getCause() instanceof TopologyException) {
+                return utf8Slice(e.getMessage());
             }
-
-            if (!OperatorSimplifyOGC.local().isSimpleOGC(geometry, null, true, result, null)) {
-                String reasonText = NON_SIMPLE_REASONS.getOrDefault(result.m_reason, result.m_reason.name());
-
-                if (!(geometry instanceof MultiVertexGeometry)) {
-                    return utf8Slice(reasonText);
-                }
-
-                MultiVertexGeometry multiVertexGeometry = (MultiVertexGeometry) geometry;
-                if (result.m_vertexIndex1 >= 0 && result.m_vertexIndex2 >= 0) {
-                    Point point1 = multiVertexGeometry.getPoint(result.m_vertexIndex1);
-                    Point point2 = multiVertexGeometry.getPoint(result.m_vertexIndex2);
-                    return utf8Slice(format("%s at or near (%s %s) and (%s %s)", reasonText, point1.getX(), point1.getY(), point2.getX(), point2.getY()));
-                }
-
-                if (result.m_vertexIndex1 >= 0) {
-                    Point point = multiVertexGeometry.getPoint(result.m_vertexIndex1);
-                    return utf8Slice(format("%s at or near (%s %s)", reasonText, point.getX(), point.getY()));
-                }
-
-                return utf8Slice(reasonText);
-            }
+            throw e;
         }
     }
 
@@ -861,22 +854,42 @@ public final class GeoFunctions
     }
 
     @SqlNullable
-    @Description("Returns an array of points in a linestring")
+    @Description("Returns an array of points in a geometry")
     @ScalarFunction("ST_Points")
     @SqlType("array(" + GEOMETRY_TYPE_NAME + ")")
     public static Block stPoints(@SqlType(GEOMETRY_TYPE_NAME) Slice input)
     {
         Geometry geometry = deserialize(input);
-        validateType("ST_Points", geometry, EnumSet.of(LINE_STRING));
         if (geometry.isEmpty()) {
             return null;
         }
-        LineString lineString = (LineString) geometry;
-        BlockBuilder blockBuilder = GEOMETRY.createBlockBuilder(null, lineString.getNumPoints());
-        for (int i = 0; i < lineString.getNumPoints(); i++) {
-            GEOMETRY.writeSlice(blockBuilder, serialize(lineString.getPointN(i)));
-        }
+
+        BlockBuilder blockBuilder = GEOMETRY.createBlockBuilder(null, geometry.getNumPoints());
+        buildPointsBlock(geometry, blockBuilder);
+
         return blockBuilder.build();
+    }
+
+    private static void buildPointsBlock(Geometry geometry, BlockBuilder blockBuilder)
+    {
+        GeometryType type = GeometryType.getForJtsGeometryType(geometry.getGeometryType());
+        if (type == GeometryType.POINT) {
+            GEOMETRY.writeSlice(blockBuilder, serialize(geometry));
+        }
+        else if (type == GeometryType.GEOMETRY_COLLECTION) {
+            GeometryCollection collection = (GeometryCollection) geometry;
+            for (int i = 0; i < collection.getNumGeometries(); i++) {
+                Geometry entry = collection.getGeometryN(i);
+                buildPointsBlock(entry, blockBuilder);
+            }
+        }
+        else {
+            GeometryFactory geometryFactory = geometry.getFactory();
+            Coordinate[] vertices = geometry.getCoordinates();
+            for (Coordinate coordinate : vertices) {
+                GEOMETRY.writeSlice(blockBuilder, serialize(geometryFactory.createPoint(coordinate)));
+            }
+        }
     }
 
     @SqlNullable
@@ -1011,7 +1024,10 @@ public final class GeoFunctions
     @SqlType(GEOMETRY_TYPE_NAME)
     public static Slice stIntersection(@SqlType(GEOMETRY_TYPE_NAME) Slice left, @SqlType(GEOMETRY_TYPE_NAME) Slice right)
     {
-        if (deserializeType(left) == GeometrySerializationType.ENVELOPE && deserializeType(right) == GeometrySerializationType.ENVELOPE) {
+        GeometrySerializationType leftType = deserializeType(left);
+        GeometrySerializationType rightType = deserializeType(right);
+
+        if (leftType == GeometrySerializationType.ENVELOPE && rightType == GeometrySerializationType.ENVELOPE) {
             Envelope leftEnvelope = deserializeEnvelope(left);
             Envelope rightEnvelope = deserializeEnvelope(right);
 
@@ -1033,6 +1049,17 @@ public final class GeoFunctions
             }
 
             return EsriGeometrySerde.serialize(intersection);
+        }
+
+        // If one side is an envelope, then if it contains the other's envelope we can just return the other geometry.
+        if (leftType == GeometrySerializationType.ENVELOPE
+                && deserializeEnvelope(left).contains(deserializeEnvelope(right))) {
+            return right;
+        }
+
+        if (rightType == GeometrySerializationType.ENVELOPE
+                && deserializeEnvelope(right).contains(deserializeEnvelope(left))) {
+            return left;
         }
 
         OGCGeometry leftGeometry = EsriGeometrySerde.deserialize(left);

@@ -19,9 +19,6 @@ import com.facebook.presto.sql.tree.QualifiedName;
 import com.facebook.presto.tests.StandaloneQueryRunner;
 import com.facebook.presto.type.TypeRegistry;
 import com.facebook.presto.verifier.checksum.ChecksumValidator;
-import com.facebook.presto.verifier.checksum.FloatingPointColumnValidator;
-import com.facebook.presto.verifier.checksum.OrderableArrayColumnValidator;
-import com.facebook.presto.verifier.checksum.SimpleColumnValidator;
 import com.facebook.presto.verifier.event.DeterminismAnalysisRun;
 import com.facebook.presto.verifier.event.VerifierQueryEvent;
 import com.facebook.presto.verifier.event.VerifierQueryEvent.EventStatus;
@@ -35,7 +32,6 @@ import com.facebook.presto.verifier.rewrite.QueryRewriter;
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Test;
 
@@ -48,6 +44,7 @@ import static com.facebook.presto.sql.parser.IdentifierSymbol.AT_SIGN;
 import static com.facebook.presto.sql.parser.IdentifierSymbol.COLON;
 import static com.facebook.presto.verifier.VerifierTestUtil.CATALOG;
 import static com.facebook.presto.verifier.VerifierTestUtil.SCHEMA;
+import static com.facebook.presto.verifier.VerifierTestUtil.createChecksumValidator;
 import static com.facebook.presto.verifier.VerifierTestUtil.setupPresto;
 import static com.facebook.presto.verifier.event.VerifierQueryEvent.EventStatus.FAILED;
 import static com.facebook.presto.verifier.event.VerifierQueryEvent.EventStatus.SKIPPED;
@@ -88,16 +85,17 @@ public class TestDataVerification
 
     private DataVerification createVerification(String controlQuery, String testQuery)
     {
-        return createVerification(controlQuery, testQuery, new VerifierConfig().setTestId(TEST_ID));
+        return createVerification(controlQuery, testQuery, new DeterminismAnalyzerConfig());
     }
 
-    private DataVerification createVerification(String controlQuery, String testQuery, VerifierConfig verifierConfig)
+    private DataVerification createVerification(String controlQuery, String testQuery, DeterminismAnalyzerConfig determinismAnalyzerConfig)
     {
         QueryConfiguration configuration = new QueryConfiguration(CATALOG, SCHEMA, Optional.of("user"), Optional.empty(), Optional.empty());
         VerificationContext verificationContext = new VerificationContext();
+        VerifierConfig verifierConfig = new VerifierConfig().setTestId(TEST_ID);
         RetryConfig retryConfig = new RetryConfig();
         PrestoAction prestoAction = new JdbcPrestoAction(
-                new PrestoExceptionClassifier(ImmutableSet.of(), ImmutableSet.of()),
+                PrestoExceptionClassifier.createDefault(),
                 configuration,
                 verificationContext,
                 new PrestoClusterConfig()
@@ -110,22 +108,27 @@ public class TestDataVerification
                 prestoAction,
                 ImmutableList.of(),
                 ImmutableMap.of(CONTROL, QualifiedName.of("tmp_verifier_c"), TEST, QualifiedName.of("tmp_verifier_t")));
-        ChecksumValidator checksumValidator = new ChecksumValidator(
-                new SimpleColumnValidator(),
-                new FloatingPointColumnValidator(verifierConfig),
-                new OrderableArrayColumnValidator());
+        ChecksumValidator checksumValidator = createChecksumValidator(verifierConfig);
         SourceQuery sourceQuery = new SourceQuery(SUITE, NAME, controlQuery, testQuery, configuration, configuration);
+        TypeRegistry typeManager = new TypeRegistry();
         return new DataVerification(
                 (verification, e) -> false,
                 prestoAction,
                 sourceQuery,
                 queryRewriter,
+                new DeterminismAnalyzer(
+                        sourceQuery,
+                        prestoAction,
+                        queryRewriter,
+                        checksumValidator,
+                        typeManager,
+                        verificationContext,
+                        determinismAnalyzerConfig),
                 new FailureResolverManager(ImmutableList.of()),
                 verificationContext,
                 verifierConfig,
-                new TypeRegistry(),
-                checksumValidator,
-                new LimitQueryDeterminismAnalyzer(prestoAction, verifierConfig));
+                typeManager,
+                checksumValidator);
     }
 
     @Test
@@ -248,7 +251,7 @@ public class TestDataVerification
     {
         Optional<VerifierQueryEvent> event = createVerification(
                 "SELECT ARRAY[ROW(1, 'a'), ROW(2, null)]", "SELECT ARRAY[ROW(1, 'a'), ROW(2, null)]",
-                new VerifierConfig().setTestId(TEST_ID).setMaxDeterminismAnalysisRuns(3)).run();
+                new DeterminismAnalyzerConfig().setMaxAnalysisRuns(3)).run();
         assertTrue(event.isPresent());
         assertEvent(event.get(), SUCCEEDED, Optional.empty(), Optional.empty(), Optional.empty());
 
@@ -263,7 +266,9 @@ public class TestDataVerification
                         "COLUMN MISMATCH\n" +
                         "Control 1 rows, Test 1 rows\n" +
                         "Mismatched Columns:\n" +
-                        "  _col0 \\(array\\(row\\(integer, varchar\\(1\\)\\)\\)\\): control\\(checksum: 71 b5 2f 7f 1e 9b a6 a4\\) test\\(checksum: b4 3c 7d 02 2b 14 77 12\\)\n"));
+                        "  _col0 \\(array\\(row\\(integer, varchar\\(1\\)\\)\\)\\):" +
+                        " control\\(checksum: 71 b5 2f 7f 1e 9b a6 a4, cardinality_sum: 2\\)" +
+                        " test\\(checksum: b4 3c 7d 02 2b 14 77 12, cardinality_sum: 2\\)\n"));
 
         List<DeterminismAnalysisRun> runs = event.get().getDeterminismAnalysisDetails().getRuns();
         assertEquals(runs.size(), 2);

@@ -26,6 +26,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Optional;
 
+import static com.facebook.presto.hive.HiveFileContext.DEFAULT_HIVE_FILE_CONTEXT;
 import static com.facebook.presto.memory.context.AggregatedMemoryContext.newSimpleAggregatedMemoryContext;
 import static com.facebook.presto.orc.OrcPredicate.TRUE;
 import static com.facebook.presto.orc.OrcReader.MAX_BATCH_SIZE;
@@ -118,12 +119,13 @@ public class TestReadBloomFilter
                 OrcEncoding.ORC,
                 new StorageOrcFileTailSource(),
                 new StorageStripeMetadataSource(),
-                OrcReaderTestingUtils.createDefaultTestConfig());
+                OrcReaderTestingUtils.createDefaultTestConfig(),
+                DEFAULT_HIVE_FILE_CONTEXT);
 
         assertEquals(orcReader.getColumnNames(), ImmutableList.of("test"));
         assertEquals(orcReader.getFooter().getRowsInRowGroup(), 10_000);
 
-        return orcReader.createBatchRecordReader(ImmutableMap.of(0, type), predicate, HIVE_STORAGE_TIME_ZONE, newSimpleAggregatedMemoryContext(), MAX_BATCH_SIZE);
+        return orcReader.createBatchRecordReader(ImmutableMap.of(0, type), predicate, HIVE_STORAGE_TIME_ZONE, newSimpleAggregatedMemoryContext(), MAX_BATCH_SIZE, DEFAULT_HIVE_FILE_CONTEXT);
     }
 
     private static <T> TupleDomainOrcPredicate<String> makeOrcPredicate(Type type, T value, boolean bloomFilterEnabled)

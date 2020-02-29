@@ -48,7 +48,8 @@ public class TableWriterNode
     private final VariableReferenceExpression tableCommitContextVariable;
     private final List<VariableReferenceExpression> columns;
     private final List<String> columnNames;
-    private final Optional<PartitioningScheme> partitioningScheme;
+    private final Optional<PartitioningScheme> tablePartitioningScheme;
+    private final Optional<PartitioningScheme> preferredShufflePartitioningScheme;
     private final Optional<StatisticAggregations> statisticsAggregation;
     private final List<VariableReferenceExpression> outputs;
 
@@ -62,7 +63,8 @@ public class TableWriterNode
             @JsonProperty("tableCommitContextVariable") VariableReferenceExpression tableCommitContextVariable,
             @JsonProperty("columns") List<VariableReferenceExpression> columns,
             @JsonProperty("columnNames") List<String> columnNames,
-            @JsonProperty("partitioningScheme") Optional<PartitioningScheme> partitioningScheme,
+            @JsonProperty("partitioningScheme") Optional<PartitioningScheme> tablePartitioningScheme,
+            @JsonProperty("preferredShufflePartitioningScheme") Optional<PartitioningScheme> preferredShufflePartitioningScheme,
             @JsonProperty("statisticsAggregation") Optional<StatisticAggregations> statisticsAggregation)
     {
         super(id);
@@ -70,6 +72,9 @@ public class TableWriterNode
         requireNonNull(columns, "columns is null");
         requireNonNull(columnNames, "columnNames is null");
         checkArgument(columns.size() == columnNames.size(), "columns and columnNames sizes don't match");
+        checkArgument(
+                !(tablePartitioningScheme.isPresent() && preferredShufflePartitioningScheme.isPresent()),
+                "tablePartitioningScheme and preferredShufflePartitioningScheme cannot both exist");
 
         this.source = requireNonNull(source, "source is null");
         this.target = requireNonNull(target, "target is null");
@@ -78,7 +83,8 @@ public class TableWriterNode
         this.tableCommitContextVariable = requireNonNull(tableCommitContextVariable, "tableCommitContextVariable is null");
         this.columns = ImmutableList.copyOf(columns);
         this.columnNames = ImmutableList.copyOf(columnNames);
-        this.partitioningScheme = requireNonNull(partitioningScheme, "partitioningScheme is null");
+        this.tablePartitioningScheme = requireNonNull(tablePartitioningScheme, "partitioningScheme is null");
+        this.preferredShufflePartitioningScheme = requireNonNull(preferredShufflePartitioningScheme, "preferredShufflePartitioningScheme is null");
         this.statisticsAggregation = requireNonNull(statisticsAggregation, "statisticsAggregation is null");
 
         ImmutableList.Builder<VariableReferenceExpression> outputs = ImmutableList.<VariableReferenceExpression>builder()
@@ -135,9 +141,15 @@ public class TableWriterNode
     }
 
     @JsonProperty
-    public Optional<PartitioningScheme> getPartitioningScheme()
+    public Optional<PartitioningScheme> getTablePartitioningScheme()
     {
-        return partitioningScheme;
+        return tablePartitioningScheme;
+    }
+
+    @JsonProperty
+    public Optional<PartitioningScheme> getPreferredShufflePartitioningScheme()
+    {
+        return preferredShufflePartitioningScheme;
     }
 
     @JsonProperty
@@ -167,7 +179,18 @@ public class TableWriterNode
     @Override
     public PlanNode replaceChildren(List<PlanNode> newChildren)
     {
-        return new TableWriterNode(getId(), Iterables.getOnlyElement(newChildren), target, rowCountVariable, fragmentVariable, tableCommitContextVariable, columns, columnNames, partitioningScheme, statisticsAggregation);
+        return new TableWriterNode(
+                getId(),
+                Iterables.getOnlyElement(newChildren),
+                target,
+                rowCountVariable,
+                fragmentVariable,
+                tableCommitContextVariable,
+                columns,
+                columnNames,
+                tablePartitioningScheme,
+                preferredShufflePartitioningScheme,
+                statisticsAggregation);
     }
 
     // only used during planning -- will not be serialized

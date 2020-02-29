@@ -23,6 +23,7 @@ import org.testng.annotations.Test;
 
 import java.util.Map;
 
+import static com.facebook.presto.hive.HiveFileContext.DEFAULT_HIVE_FILE_CONTEXT;
 import static com.facebook.presto.memory.context.AggregatedMemoryContext.newSimpleAggregatedMemoryContext;
 import static com.facebook.presto.orc.OrcEncoding.ORC;
 import static com.facebook.presto.orc.OrcReader.INITIAL_BATCH_SIZE;
@@ -56,7 +57,8 @@ public class TestOrcLz4
                         SIZE,
                         SIZE,
                         SIZE,
-                        false));
+                        false),
+                DEFAULT_HIVE_FILE_CONTEXT);
 
         assertEquals(orcReader.getCompressionKind(), LZ4);
         assertEquals(orcReader.getFooter().getNumberOfRows(), 10_000);
@@ -72,7 +74,8 @@ public class TestOrcLz4
                 OrcPredicate.TRUE,
                 DateTimeZone.UTC,
                 newSimpleAggregatedMemoryContext(),
-                INITIAL_BATCH_SIZE);
+                INITIAL_BATCH_SIZE,
+                DEFAULT_HIVE_FILE_CONTEXT);
 
         int rows = 0;
         while (true) {

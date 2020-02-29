@@ -19,6 +19,7 @@ import com.facebook.airlift.configuration.DefunctConfig;
 import com.facebook.airlift.configuration.LegacyConfig;
 import com.facebook.presto.hive.s3.S3FileSystemType;
 import com.facebook.presto.orc.OrcWriteValidation.OrcWriteValidationMode;
+import com.facebook.presto.spi.schedule.NodeSelectionStrategy;
 import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
 import io.airlift.units.DataSize;
@@ -39,6 +40,7 @@ import java.util.TimeZone;
 import java.util.concurrent.TimeUnit;
 
 import static com.facebook.presto.hive.HiveStorageFormat.ORC;
+import static com.facebook.presto.spi.schedule.NodeSelectionStrategy.NO_PREFERENCE;
 import static io.airlift.units.DataSize.Unit.MEGABYTE;
 
 @DefunctConfig({
@@ -49,6 +51,8 @@ import static io.airlift.units.DataSize.Unit.MEGABYTE;
         "hive.optimized-reader.enabled"})
 public class HiveClientConfig
 {
+    private static final Splitter SPLITTER = Splitter.on(',').trimResults().omitEmptyStrings();
+
     private String timeZone = TimeZone.getDefault().getID();
 
     private DataSize maxSplitSize = new DataSize(64, MEGABYTE);
@@ -63,7 +67,7 @@ public class HiveClientConfig
     private DataSize maxInitialSplitSize;
     private int domainCompactionThreshold = 100;
     private DataSize writerSortBufferSize = new DataSize(64, MEGABYTE);
-    private boolean forceLocalScheduling;
+    private NodeSelectionStrategy nodeSelectionStrategy = NO_PREFERENCE;
     private boolean recursiveDirWalkerEnabled;
 
     private int maxConcurrentFileRenames = 20;
@@ -83,6 +87,7 @@ public class HiveClientConfig
     private HiveCompressionCodec compressionCodec = HiveCompressionCodec.GZIP;
     private boolean respectTableFormat = true;
     private boolean immutablePartitions;
+    private boolean insertOverwriteImmutablePartitions;
     private int maxPartitionsPerWriter = 100;
     private int maxOpenSortFiles = 50;
     private int writeValidationThreads = 16;
@@ -152,7 +157,12 @@ public class HiveClientConfig
 
     private boolean pushdownFilterEnabled;
     private boolean rangeFiltersOnSubscriptsEnabled;
+    private boolean adaptiveFilterReorderingEnabled = true;
     private boolean zstdJniDecompressionEnabled;
+
+    private Duration fileStatusCacheExpireAfterWrite = new Duration(0, TimeUnit.SECONDS);
+    private long fileStatusCacheMaxSize;
+    private List<String> fileStatusCacheTables = ImmutableList.of();
 
     public int getMaxInitialSplits()
     {
@@ -222,15 +232,15 @@ public class HiveClientConfig
         return this;
     }
 
-    public boolean isForceLocalScheduling()
+    public NodeSelectionStrategy getNodeSelectionStrategy()
     {
-        return forceLocalScheduling;
+        return nodeSelectionStrategy;
     }
 
-    @Config("hive.force-local-scheduling")
-    public HiveClientConfig setForceLocalScheduling(boolean forceLocalScheduling)
+    @Config("hive.node-selection-strategy")
+    public HiveClientConfig setNodeSelectionStrategy(NodeSelectionStrategy nodeSelectionStrategy)
     {
-        this.forceLocalScheduling = forceLocalScheduling;
+        this.nodeSelectionStrategy = nodeSelectionStrategy;
         return this;
     }
 
@@ -507,6 +517,19 @@ public class HiveClientConfig
     public HiveClientConfig setRespectTableFormat(boolean respectTableFormat)
     {
         this.respectTableFormat = respectTableFormat;
+        return this;
+    }
+
+    public boolean isInsertOverwriteImmutablePartitionEnabled()
+    {
+        return insertOverwriteImmutablePartitions;
+    }
+
+    @Config("hive.insert-overwrite-immutable-partitions-enabled")
+    @ConfigDescription("When enabled, insertion query will overwrite existing partitions when partitions are immutable. This config only takes effect with hive.immutable-partitions set to true")
+    public HiveClientConfig setInsertOverwriteImmutablePartitionEnabled(boolean insertOverwriteImmutablePartitions)
+    {
+        this.insertOverwriteImmutablePartitions = insertOverwriteImmutablePartitions;
         return this;
     }
 
@@ -870,6 +893,42 @@ public class HiveClientConfig
     public HiveClientConfig setZstdJniDecompressionEnabled(boolean zstdJniDecompressionEnabled)
     {
         this.zstdJniDecompressionEnabled = zstdJniDecompressionEnabled;
+        return this;
+    }
+
+    public List<String> getFileStatusCacheTables()
+    {
+        return fileStatusCacheTables;
+    }
+
+    @Config("hive.file-status-cache-tables")
+    public HiveClientConfig setFileStatusCacheTables(String fileStatusCacheTables)
+    {
+        this.fileStatusCacheTables = SPLITTER.splitToList(fileStatusCacheTables);
+        return this;
+    }
+
+    public long getFileStatusCacheMaxSize()
+    {
+        return fileStatusCacheMaxSize;
+    }
+
+    @Config("hive.file-status-cache-size")
+    public HiveClientConfig setFileStatusCacheMaxSize(long fileStatusCacheMaxSize)
+    {
+        this.fileStatusCacheMaxSize = fileStatusCacheMaxSize;
+        return this;
+    }
+
+    public Duration getFileStatusCacheExpireAfterWrite()
+    {
+        return fileStatusCacheExpireAfterWrite;
+    }
+
+    @Config("hive.file-status-cache-expire-time")
+    public HiveClientConfig setFileStatusCacheExpireAfterWrite(Duration fileStatusCacheExpireAfterWrite)
+    {
+        this.fileStatusCacheExpireAfterWrite = fileStatusCacheExpireAfterWrite;
         return this;
     }
 
@@ -1250,6 +1309,19 @@ public class HiveClientConfig
     public HiveClientConfig setRangeFiltersOnSubscriptsEnabled(boolean rangeFiltersOnSubscriptsEnabled)
     {
         this.rangeFiltersOnSubscriptsEnabled = rangeFiltersOnSubscriptsEnabled;
+        return this;
+    }
+
+    public boolean isAdaptiveFilterReorderingEnabled()
+    {
+        return adaptiveFilterReorderingEnabled;
+    }
+
+    @Config("hive.adaptive-filter-reordering-enabled")
+    @ConfigDescription("Experimental: enable adaptive filter reordering")
+    public HiveClientConfig setAdaptiveFilterReorderingEnabled(boolean adaptiveFilterReorderingEnabled)
+    {
+        this.adaptiveFilterReorderingEnabled = adaptiveFilterReorderingEnabled;
         return this;
     }
 }

@@ -147,10 +147,26 @@ public class ClassLoaderSafeConnectorMetadata
     }
 
     @Override
+    public Optional<ConnectorNewTableLayout> getPreferredShuffleLayoutForNewTable(ConnectorSession session, ConnectorTableMetadata tableMetadata)
+    {
+        try (ThreadContextClassLoader ignored = new ThreadContextClassLoader(classLoader)) {
+            return delegate.getPreferredShuffleLayoutForNewTable(session, tableMetadata);
+        }
+    }
+
+    @Override
     public Optional<ConnectorNewTableLayout> getInsertLayout(ConnectorSession session, ConnectorTableHandle tableHandle)
     {
         try (ThreadContextClassLoader ignored = new ThreadContextClassLoader(classLoader)) {
             return delegate.getInsertLayout(session, tableHandle);
+        }
+    }
+
+    @Override
+    public Optional<ConnectorNewTableLayout> getPreferredShuffleLayoutForInsert(ConnectorSession session, ConnectorTableHandle tableHandle)
+    {
+        try (ThreadContextClassLoader ignored = new ThreadContextClassLoader(classLoader)) {
+            return delegate.getPreferredShuffleLayoutForInsert(session, tableHandle);
         }
     }
 
@@ -419,10 +435,10 @@ public class ClassLoaderSafeConnectorMetadata
     }
 
     @Override
-    public void createView(ConnectorSession session, SchemaTableName viewName, String viewData, boolean replace)
+    public void createView(ConnectorSession session, ConnectorTableMetadata viewMetadata, String viewData, boolean replace)
     {
         try (ThreadContextClassLoader ignored = new ThreadContextClassLoader(classLoader)) {
-            delegate.createView(session, viewName, viewData, replace);
+            delegate.createView(session, viewMetadata, viewData, replace);
         }
     }
 

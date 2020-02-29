@@ -25,6 +25,8 @@ import java.util.concurrent.TimeUnit;
 import static com.facebook.airlift.configuration.testing.ConfigAssertions.assertFullMapping;
 import static com.facebook.airlift.configuration.testing.ConfigAssertions.assertRecordedDefaults;
 import static com.facebook.airlift.configuration.testing.ConfigAssertions.recordDefaults;
+import static com.facebook.presto.execution.TaskManagerConfig.TaskPriorityTracking.QUERY_FAIR;
+import static com.facebook.presto.execution.TaskManagerConfig.TaskPriorityTracking.TASK_FAIR;
 import static io.airlift.units.DataSize.Unit;
 
 public class TestTaskManagerConfig
@@ -57,12 +59,14 @@ public class TestTaskManagerConfig
                 .setPartitionedWriterCount(null)
                 .setTaskConcurrency(16)
                 .setHttpResponseThreads(100)
+                .setHttpTimeoutConcurrency(1)
                 .setHttpTimeoutThreads(3)
                 .setTaskNotificationThreads(5)
                 .setTaskYieldThreads(3)
                 .setLevelTimeMultiplier(new BigDecimal("2"))
                 .setStatisticsCpuTimerEnabled(true)
-                .setLegacyLifespanCompletionCondition(false));
+                .setLegacyLifespanCompletionCondition(false)
+                .setTaskPriorityTracking(TASK_FAIR));
     }
 
     @Test
@@ -93,12 +97,14 @@ public class TestTaskManagerConfig
                 .put("task.partitioned-writer-count", "8")
                 .put("task.concurrency", "8")
                 .put("task.http-response-threads", "4")
+                .put("task.http-timeout-concurrency", "2")
                 .put("task.http-timeout-threads", "10")
                 .put("task.task-notification-threads", "13")
                 .put("task.task-yield-threads", "8")
                 .put("task.level-time-multiplier", "2.1")
                 .put("task.statistics-cpu-timer-enabled", "false")
                 .put("task.legacy-lifespan-completion-condition", "true")
+                .put("task.task-priority-tracking", "QUERY_FAIR")
                 .build();
 
         TaskManagerConfig expected = new TaskManagerConfig()
@@ -126,12 +132,14 @@ public class TestTaskManagerConfig
                 .setPartitionedWriterCount(8)
                 .setTaskConcurrency(8)
                 .setHttpResponseThreads(4)
+                .setHttpTimeoutConcurrency(2)
                 .setHttpTimeoutThreads(10)
                 .setTaskNotificationThreads(13)
                 .setTaskYieldThreads(8)
                 .setLevelTimeMultiplier(new BigDecimal("2.1"))
                 .setStatisticsCpuTimerEnabled(false)
-                .setLegacyLifespanCompletionCondition(true);
+                .setLegacyLifespanCompletionCondition(true)
+                .setTaskPriorityTracking(QUERY_FAIR);
 
         assertFullMapping(properties, expected);
     }

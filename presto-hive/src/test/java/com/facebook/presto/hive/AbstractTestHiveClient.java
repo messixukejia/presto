@@ -180,6 +180,7 @@ import static com.facebook.presto.hive.HiveColumnHandle.ColumnType.PARTITION_KEY
 import static com.facebook.presto.hive.HiveColumnHandle.ColumnType.REGULAR;
 import static com.facebook.presto.hive.HiveColumnHandle.MAX_PARTITION_KEY_COLUMN_INDEX;
 import static com.facebook.presto.hive.HiveColumnHandle.bucketColumnHandle;
+import static com.facebook.presto.hive.HiveErrorCode.HIVE_INVALID_PARTITION_VALUE;
 import static com.facebook.presto.hive.HiveErrorCode.HIVE_PARTITION_SCHEMA_MISMATCH;
 import static com.facebook.presto.hive.HiveMetadata.PRESTO_VERSION_NAME;
 import static com.facebook.presto.hive.HiveMetadata.convertToPredicate;
@@ -226,7 +227,6 @@ import static com.facebook.presto.hive.HiveType.HIVE_STRING;
 import static com.facebook.presto.hive.HiveType.toHiveType;
 import static com.facebook.presto.hive.HiveUtil.columnExtraInfo;
 import static com.facebook.presto.hive.LocationHandle.WriteMode.STAGE_AND_MOVE_TO_TARGET_DIRECTORY;
-import static com.facebook.presto.hive.MetastoreErrorCode.HIVE_INVALID_PARTITION_VALUE;
 import static com.facebook.presto.hive.metastore.HiveColumnStatistics.createBinaryColumnStatistics;
 import static com.facebook.presto.hive.metastore.HiveColumnStatistics.createBooleanColumnStatistics;
 import static com.facebook.presto.hive.metastore.HiveColumnStatistics.createDateColumnStatistics;
@@ -239,6 +239,7 @@ import static com.facebook.presto.hive.metastore.MetastoreUtil.createDirectory;
 import static com.facebook.presto.hive.metastore.MetastoreUtil.toPartitionValues;
 import static com.facebook.presto.hive.metastore.PrestoTableType.MANAGED_TABLE;
 import static com.facebook.presto.hive.metastore.StorageFormat.fromHiveStorageFormat;
+import static com.facebook.presto.spi.SplitContext.NON_CACHEABLE;
 import static com.facebook.presto.spi.StandardErrorCode.NOT_SUPPORTED;
 import static com.facebook.presto.spi.StandardErrorCode.TRANSACTION_CONFLICT;
 import static com.facebook.presto.spi.connector.ConnectorSplitManager.SplitSchedulingStrategy.UNGROUPED_SCHEDULING;
@@ -936,7 +937,7 @@ public abstract class AbstractTestHiveClient
                 transactionManager,
                 new NamenodeStats(),
                 hdfsEnvironment,
-                new HadoopDirectoryLister(),
+                new CachingDirectoryLister(new HadoopDirectoryLister(), new HiveClientConfig()),
                 directExecutor(),
                 new HiveCoercionPolicy(TYPE_MANAGER),
                 new CounterStat(),
@@ -990,7 +991,8 @@ public abstract class AbstractTestHiveClient
     protected ConnectorSession newSession(Map<String, Object> extraProperties)
     {
         ConnectorSession session = newSession();
-        return new ConnectorSession() {
+        return new ConnectorSession()
+        {
             @Override
             public String getQueryId()
             {
@@ -1962,7 +1964,7 @@ public abstract class AbstractTestHiveClient
 
             ImmutableList.Builder<MaterializedRow> allRows = ImmutableList.builder();
             for (ConnectorSplit split : splits) {
-                try (ConnectorPageSource pageSource = pageSourceProvider.createPageSource(transaction.getTransactionHandle(), session, split, tableHandle.getLayout().get(), columnHandles)) {
+                try (ConnectorPageSource pageSource = pageSourceProvider.createPageSource(transaction.getTransactionHandle(), session, split, tableHandle.getLayout().get(), columnHandles, NON_CACHEABLE)) {
                     MaterializedResult intermediateResult = materializeSourceDataStream(session, pageSource, getTypes(columnHandles));
                     allRows.addAll(intermediateResult.getMaterializedRows());
                 }
@@ -2164,7 +2166,7 @@ public abstract class AbstractTestHiveClient
 
                 long rowNumber = 0;
                 long completedBytes = 0;
-                try (ConnectorPageSource pageSource = pageSourceProvider.createPageSource(transaction.getTransactionHandle(), session, hiveSplit, layoutHandle, columnHandles)) {
+                try (ConnectorPageSource pageSource = pageSourceProvider.createPageSource(transaction.getTransactionHandle(), session, hiveSplit, layoutHandle, columnHandles, NON_CACHEABLE)) {
                     MaterializedResult result = materializeSourceDataStream(session, pageSource, getTypes(columnHandles));
 
                     assertPageSourceType(pageSource, fileType);
@@ -2255,7 +2257,7 @@ public abstract class AbstractTestHiveClient
                 int dummyPartition = Integer.parseInt(partitionKeys.get(2).getValue());
 
                 long rowNumber = 0;
-                try (ConnectorPageSource pageSource = pageSourceProvider.createPageSource(transaction.getTransactionHandle(), session, hiveSplit, layoutHandle, columnHandles)) {
+                try (ConnectorPageSource pageSource = pageSourceProvider.createPageSource(transaction.getTransactionHandle(), session, hiveSplit, layoutHandle, columnHandles, NON_CACHEABLE)) {
                     assertPageSourceType(pageSource, fileType);
                     MaterializedResult result = materializeSourceDataStream(session, pageSource, getTypes(columnHandles));
                     for (MaterializedRow row : result) {
@@ -2294,7 +2296,7 @@ public abstract class AbstractTestHiveClient
                 assertEquals(hiveSplit.getPartitionKeys(), ImmutableList.of());
 
                 long rowNumber = 0;
-                try (ConnectorPageSource pageSource = pageSourceProvider.createPageSource(transaction.getTransactionHandle(), session, split, layoutHandle, columnHandles)) {
+                try (ConnectorPageSource pageSource = pageSourceProvider.createPageSource(transaction.getTransactionHandle(), session, split, layoutHandle, columnHandles, NON_CACHEABLE)) {
                     assertPageSourceType(pageSource, TEXTFILE);
                     MaterializedResult result = materializeSourceDataStream(session, pageSource, getTypes(columnHandles));
 
@@ -2362,7 +2364,7 @@ public abstract class AbstractTestHiveClient
             ConnectorSplit split = getOnlyElement(getAllSplits(splitSource));
 
             ImmutableList<ColumnHandle> columnHandles = ImmutableList.of(column);
-            try (ConnectorPageSource ignored = pageSourceProvider.createPageSource(transaction.getTransactionHandle(), session, split, layoutHandle, columnHandles)) {
+            try (ConnectorPageSource ignored = pageSourceProvider.createPageSource(transaction.getTransactionHandle(), session, split, layoutHandle, columnHandles, NON_CACHEABLE)) {
                 fail("expected exception");
             }
             catch (PrestoException e) {
@@ -2827,7 +2829,7 @@ public abstract class AbstractTestHiveClient
 
             int actualRowCount = 0;
             for (ConnectorSplit split : splits) {
-                try (ConnectorPageSource pageSource = pageSourceProvider.createPageSource(transaction.getTransactionHandle(), session, split, layoutHandle, columnHandles)) {
+                try (ConnectorPageSource pageSource = pageSourceProvider.createPageSource(transaction.getTransactionHandle(), session, split, layoutHandle, columnHandles, NON_CACHEABLE)) {
                     String lastValueAsc = null;
                     long lastValueDesc = -1;
 
@@ -3637,7 +3639,10 @@ public abstract class AbstractTestHiveClient
     {
         String viewData = "test data";
         try (Transaction transaction = newTransaction()) {
-            transaction.getMetadata().createView(newSession(), viewName, viewData, replace);
+            ConnectorTableMetadata viewMetadata1 = new ConnectorTableMetadata(
+                    viewName,
+                    ImmutableList.of(new ColumnMetadata("a", BIGINT)));
+            transaction.getMetadata().createView(newSession(), viewMetadata1, viewData, replace);
             transaction.commit();
         }
 
@@ -4484,7 +4489,7 @@ public abstract class AbstractTestHiveClient
 
             List<ColumnHandle> columnHandles = ImmutableList.copyOf(metadata.getColumnHandles(session, tableHandle).values());
 
-            ConnectorPageSource pageSource = pageSourceProvider.createPageSource(transaction.getTransactionHandle(), session, hiveSplit, layoutHandle, columnHandles);
+            ConnectorPageSource pageSource = pageSourceProvider.createPageSource(transaction.getTransactionHandle(), session, hiveSplit, layoutHandle, columnHandles, NON_CACHEABLE);
             assertGetRecords(hiveStorageFormat, tableMetadata, hiveSplit, pageSource, columnHandles);
         }
     }
@@ -4772,7 +4777,7 @@ public abstract class AbstractTestHiveClient
 
         ImmutableList.Builder<MaterializedRow> allRows = ImmutableList.builder();
         for (ConnectorSplit split : splits) {
-            try (ConnectorPageSource pageSource = pageSourceProvider.createPageSource(transaction.getTransactionHandle(), session, split, tableHandle.getLayout().get(), columnHandles)) {
+            try (ConnectorPageSource pageSource = pageSourceProvider.createPageSource(transaction.getTransactionHandle(), session, split, tableHandle.getLayout().get(), columnHandles, NON_CACHEABLE)) {
                 expectedStorageFormat.ifPresent(format -> assertPageSourceType(pageSource, format));
                 MaterializedResult result = materializeSourceDataStream(session, pageSource, getTypes(columnHandles));
                 allRows.addAll(result.getMaterializedRows());

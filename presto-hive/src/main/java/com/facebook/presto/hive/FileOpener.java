@@ -18,10 +18,9 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
-import java.util.Optional;
 
 public interface FileOpener
 {
-    FSDataInputStream open(FileSystem fileSystem, Path path, Optional<byte[]> extraFileInfo)
+    FSDataInputStream open(FileSystem fileSystem, Path path, HiveFileContext hiveFileContext)
             throws IOException;
 }

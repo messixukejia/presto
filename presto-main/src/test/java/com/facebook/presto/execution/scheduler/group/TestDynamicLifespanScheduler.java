@@ -15,6 +15,7 @@ package com.facebook.presto.execution.scheduler.group;
 
 import com.facebook.presto.client.NodeVersion;
 import com.facebook.presto.execution.Lifespan;
+import com.facebook.presto.execution.scheduler.BucketNodeMap;
 import com.facebook.presto.execution.scheduler.ScheduleResult;
 import com.facebook.presto.execution.scheduler.SourceScheduler;
 import com.facebook.presto.metadata.InternalNode;
@@ -22,6 +23,7 @@ import com.facebook.presto.spi.ConnectorSplit;
 import com.facebook.presto.spi.HostAddress;
 import com.facebook.presto.spi.connector.ConnectorPartitionHandle;
 import com.facebook.presto.spi.plan.PlanNodeId;
+import com.facebook.presto.spi.schedule.NodeSelectionStrategy;
 import com.google.common.collect.ImmutableList;
 import org.testng.annotations.Test;
 
@@ -32,6 +34,7 @@ import java.util.Objects;
 import java.util.OptionalInt;
 import java.util.stream.IntStream;
 
+import static com.facebook.presto.spi.schedule.NodeSelectionStrategy.HARD_AFFINITY;
 import static com.google.common.collect.ImmutableList.toImmutableList;
 import static org.testng.Assert.assertEquals;
 
@@ -39,6 +42,10 @@ public class TestDynamicLifespanScheduler
 {
     private static final int BUCKET_COUNT = 10;
     private static final int TASK_COUNT = 2;
+
+    private static final InternalNode node1 = getInternalNode("1");
+    private static final InternalNode node2 = getInternalNode("2");
+    private static final InternalNode node3 = getInternalNode("3");
 
     @Test
     public void testSchedule()
@@ -107,6 +114,155 @@ public class TestDynamicLifespanScheduler
         lifespanScheduler.onLifespanExecutionFinished(sourceScheduler.getLastStartedLifespans());
     }
 
+    @Test
+    public void testAffinitySchedule()
+    {
+        BucketNodeMap bucketNodeMap = new DynamicBucketNodeMap(
+                split -> ((TestDynamicLifespanScheduler.TestSplit) split.getConnectorSplit()).getBucketNumber(),
+                BUCKET_COUNT,
+                ImmutableList.of(node1, node2, node1, node2, node1, node2, node1, node2, node1, node2),
+                false);
+        LifespanScheduler lifespanScheduler = getAffinityLifespanScheduler(bucketNodeMap);
+        TestDynamicLifespanScheduler.TestingSourceScheduler sourceScheduler = new TestDynamicLifespanScheduler.TestingSourceScheduler();
+        lifespanScheduler.scheduleInitial(sourceScheduler);
+        lifespanScheduler.onLifespanExecutionFinished(sourceScheduler.getLastStartedLifespans());
+        assertEquals(sourceScheduler.getLastStartedLifespans().size(), 2);
+        sourceScheduler.getLastStartedLifespans().clear();
+
+        while (!lifespanScheduler.allLifespanExecutionFinished()) {
+            lifespanScheduler.schedule(sourceScheduler);
+            lifespanScheduler.onLifespanExecutionFinished(sourceScheduler.getLastStartedLifespans());
+            assertEquals(sourceScheduler.getLastStartedLifespans().size(), 2);
+            sourceScheduler.getLastStartedLifespans().clear();
+        }
+    }
+
+    @Test
+    public void testAffinityRetry()
+    {
+        BucketNodeMap bucketNodeMap = new DynamicBucketNodeMap(
+                split -> ((TestDynamicLifespanScheduler.TestSplit) split.getConnectorSplit()).getBucketNumber(),
+                BUCKET_COUNT,
+                ImmutableList.of(node1, node2, node1, node2, node1, node2, node1, node2, node1, node2),
+                false);
+        LifespanScheduler lifespanScheduler = getAffinityLifespanScheduler(bucketNodeMap);
+        TestDynamicLifespanScheduler.TestingSourceScheduler sourceScheduler = new TestDynamicLifespanScheduler.TestingSourceScheduler();
+        lifespanScheduler.scheduleInitial(sourceScheduler);
+
+        lifespanScheduler.onLifespanExecutionFinished(ImmutableList.of(sourceScheduler.getLastStartedLifespans().get(1)));
+        assertEquals(sourceScheduler.getLastStartedLifespans().size(), 2);
+        sourceScheduler.getLastStartedLifespans().clear();
+
+        lifespanScheduler.onTaskFailed(0, ImmutableList.of(sourceScheduler));
+        assertEquals(sourceScheduler.getLastRewoundLifespans().size(), 1);
+        sourceScheduler.getLastRewoundLifespans().clear();
+
+        while (!lifespanScheduler.allLifespanExecutionFinished()) {
+            lifespanScheduler.schedule(sourceScheduler);
+            lifespanScheduler.onLifespanExecutionFinished(sourceScheduler.getLastStartedLifespans());
+            assertEquals(sourceScheduler.getLastStartedLifespans().size(), 1);
+            sourceScheduler.getLastStartedLifespans().clear();
+        }
+    }
+
+    @Test
+    public void testAffinityScheduleLocality()
+    {
+        BucketNodeMap bucketNodeMap = new DynamicBucketNodeMap(
+                split -> ((TestDynamicLifespanScheduler.TestSplit) split.getConnectorSplit()).getBucketNumber(),
+                BUCKET_COUNT,
+                ImmutableList.of(node1, node3, node1, node3, node1, node3, node1, node3, node1, node3),
+                false);
+        LifespanScheduler lifespanScheduler = getAffinityLifespanScheduler(bucketNodeMap);
+        TestDynamicLifespanScheduler.TestingSourceScheduler sourceScheduler = new TestDynamicLifespanScheduler.TestingSourceScheduler();
+        lifespanScheduler.scheduleInitial(sourceScheduler);
+        assertEquals(bucketNodeMap.getAssignedNode(0).get(), node1);
+        // bucket 1 is already scheduled, thus its assignedNode is changed
+        assertEquals(bucketNodeMap.getAssignedNode(1).get(), node2);
+        assertEquals(bucketNodeMap.getAssignedNode(2).get(), node1);
+        // bucket 3 is not scheduled yet, thus its assignedNode remains
+        assertEquals(bucketNodeMap.getAssignedNode(3).get(), node3);
+        assertEquals(bucketNodeMap.getAssignedNode(4).get(), node1);
+        assertEquals(bucketNodeMap.getAssignedNode(5).get(), node3);
+        assertEquals(bucketNodeMap.getAssignedNode(6).get(), node1);
+        assertEquals(bucketNodeMap.getAssignedNode(7).get(), node3);
+        assertEquals(bucketNodeMap.getAssignedNode(8).get(), node1);
+        assertEquals(bucketNodeMap.getAssignedNode(9).get(), node3);
+
+        lifespanScheduler.onLifespanExecutionFinished(sourceScheduler.getLastStartedLifespans());
+        assertEquals(sourceScheduler.getLastStartedLifespans().size(), 2);
+        sourceScheduler.getLastStartedLifespans().clear();
+
+        while (!lifespanScheduler.allLifespanExecutionFinished()) {
+            lifespanScheduler.schedule(sourceScheduler);
+            lifespanScheduler.onLifespanExecutionFinished(sourceScheduler.getLastStartedLifespans());
+            assertEquals(sourceScheduler.getLastStartedLifespans().size(), 2);
+            sourceScheduler.getLastStartedLifespans().clear();
+        }
+        assertEquals(bucketNodeMap.getAssignedNode(0).get(), node1);
+        // bucket 1 is already scheduled, thus its assignedNode is changed
+        assertEquals(bucketNodeMap.getAssignedNode(1).get(), node2);
+        assertEquals(bucketNodeMap.getAssignedNode(2).get(), node1);
+        // bucket 3 is not scheduled yet, thus its assignedNode remains
+        assertEquals(bucketNodeMap.getAssignedNode(3).get(), node2);
+        assertEquals(bucketNodeMap.getAssignedNode(4).get(), node1);
+        assertEquals(bucketNodeMap.getAssignedNode(5).get(), node2);
+        assertEquals(bucketNodeMap.getAssignedNode(6).get(), node1);
+        assertEquals(bucketNodeMap.getAssignedNode(7).get(), node2);
+        assertEquals(bucketNodeMap.getAssignedNode(8).get(), node1);
+        assertEquals(bucketNodeMap.getAssignedNode(9).get(), node2);
+    }
+
+    @Test
+    public void testAffinityScheduleFailedLocality()
+    {
+        BucketNodeMap bucketNodeMap = new DynamicBucketNodeMap(
+                split -> ((TestDynamicLifespanScheduler.TestSplit) split.getConnectorSplit()).getBucketNumber(),
+                BUCKET_COUNT,
+                ImmutableList.of(node1, node2, node1, node2, node1, node2, node1, node2, node1, node2),
+                false);
+        LifespanScheduler lifespanScheduler = getAffinityLifespanScheduler(bucketNodeMap);
+        TestDynamicLifespanScheduler.TestingSourceScheduler sourceScheduler = new TestDynamicLifespanScheduler.TestingSourceScheduler();
+        lifespanScheduler.scheduleInitial(sourceScheduler);
+
+        lifespanScheduler.onLifespanExecutionFinished(ImmutableList.of(sourceScheduler.getLastStartedLifespans().get(1)));
+        assertEquals(sourceScheduler.getLastStartedLifespans().size(), 2);
+        sourceScheduler.getLastStartedLifespans().clear();
+
+        lifespanScheduler.onTaskFailed(0, ImmutableList.of(sourceScheduler));
+        assertEquals(sourceScheduler.getLastRewoundLifespans().size(), 1);
+        sourceScheduler.getLastRewoundLifespans().clear();
+
+        while (!lifespanScheduler.allLifespanExecutionFinished()) {
+            lifespanScheduler.schedule(sourceScheduler);
+            lifespanScheduler.onLifespanExecutionFinished(sourceScheduler.getLastStartedLifespans());
+            assertEquals(sourceScheduler.getLastStartedLifespans().size(), 1);
+            sourceScheduler.getLastStartedLifespans().clear();
+        }
+
+        assertEquals(bucketNodeMap.getAssignedNode(0).get(), node2);
+        // bucket 1 is already scheduled, thus its assignedNode is changed
+        assertEquals(bucketNodeMap.getAssignedNode(1).get(), node2);
+        assertEquals(bucketNodeMap.getAssignedNode(2).get(), node2);
+        // bucket 3 is not scheduled yet, thus its assignedNode remains
+        assertEquals(bucketNodeMap.getAssignedNode(3).get(), node2);
+        assertEquals(bucketNodeMap.getAssignedNode(4).get(), node2);
+        assertEquals(bucketNodeMap.getAssignedNode(5).get(), node2);
+        assertEquals(bucketNodeMap.getAssignedNode(6).get(), node2);
+        assertEquals(bucketNodeMap.getAssignedNode(7).get(), node2);
+        assertEquals(bucketNodeMap.getAssignedNode(8).get(), node2);
+        assertEquals(bucketNodeMap.getAssignedNode(9).get(), node2);
+    }
+
+    private static LifespanScheduler getAffinityLifespanScheduler(BucketNodeMap bucketNodeMap)
+    {
+        return new DynamicLifespanScheduler(
+                bucketNodeMap,
+                ImmutableList.of(node1, node2),
+                IntStream.range(0, 10).mapToObj(TestDynamicLifespanScheduler.TestPartitionHandle::new).collect(toImmutableList()),
+                OptionalInt.of(1));
+    }
+
     private static LifespanScheduler getLifespanScheduler()
     {
         return new DynamicLifespanScheduler(
@@ -137,13 +293,13 @@ public class TestDynamicLifespanScheduler
         }
 
         @Override
-        public boolean isRemotelyAccessible()
+        public NodeSelectionStrategy getNodeSelectionStrategy()
         {
-            return false;
+            return HARD_AFFINITY;
         }
 
         @Override
-        public List<HostAddress> getAddresses()
+        public List<HostAddress> getPreferredNodes(List<HostAddress> sortedCandidates)
         {
             return ImmutableList.of();
         }

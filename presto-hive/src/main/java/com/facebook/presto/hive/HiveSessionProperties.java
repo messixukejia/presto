@@ -16,6 +16,7 @@ package com.facebook.presto.hive;
 import com.facebook.presto.orc.OrcWriteValidation.OrcWriteValidationMode;
 import com.facebook.presto.spi.ConnectorSession;
 import com.facebook.presto.spi.PrestoException;
+import com.facebook.presto.spi.schedule.NodeSelectionStrategy;
 import com.facebook.presto.spi.session.PropertyMetadata;
 import com.google.common.collect.ImmutableList;
 import io.airlift.units.DataSize;
@@ -27,6 +28,7 @@ import java.util.concurrent.ThreadLocalRandom;
 
 import static com.facebook.presto.hive.HiveSessionProperties.InsertExistingPartitionsBehavior.APPEND;
 import static com.facebook.presto.hive.HiveSessionProperties.InsertExistingPartitionsBehavior.ERROR;
+import static com.facebook.presto.hive.HiveSessionProperties.InsertExistingPartitionsBehavior.OVERWRITE;
 import static com.facebook.presto.spi.StandardErrorCode.INVALID_SESSION_PROPERTY;
 import static com.facebook.presto.spi.session.PropertyMetadata.booleanProperty;
 import static com.facebook.presto.spi.session.PropertyMetadata.integerProperty;
@@ -42,7 +44,7 @@ public final class HiveSessionProperties
 {
     private static final String IGNORE_TABLE_BUCKETING = "ignore_table_bucketing";
     private static final String BUCKET_EXECUTION_ENABLED = "bucket_execution_enabled";
-    private static final String FORCE_LOCAL_SCHEDULING = "force_local_scheduling";
+    private static final String NODE_SELECTION_STRATEGY = "node_selection_strategy";
     private static final String INSERT_EXISTING_PARTITIONS_BEHAVIOR = "insert_existing_partitions_behavior";
     private static final String ORC_BLOOM_FILTERS_ENABLED = "orc_bloom_filters_enabled";
     private static final String ORC_MAX_MERGE_DISTANCE = "orc_max_merge_distance";
@@ -82,6 +84,7 @@ public final class HiveSessionProperties
     public static final String COLLECT_COLUMN_STATISTICS_ON_WRITE = "collect_column_statistics_on_write";
     private static final String OPTIMIZE_MISMATCHED_BUCKET_COUNT = "optimize_mismatched_bucket_count";
     private static final String S3_SELECT_PUSHDOWN_ENABLED = "s3_select_pushdown_enabled";
+    private static final String SHUFFLE_PARTITIONED_COLUMNS_FOR_TABLE_WRITE = "shuffle_partitioned_columns_for_table_write";
     private static final String TEMPORARY_STAGING_DIRECTORY_ENABLED = "temporary_staging_directory_enabled";
     private static final String TEMPORARY_STAGING_DIRECTORY_PATH = "temporary_staging_directory_path";
     private static final String TEMPORARY_TABLE_SCHEMA = "temporary_table_schema";
@@ -89,6 +92,7 @@ public final class HiveSessionProperties
     private static final String TEMPORARY_TABLE_COMPRESSION_CODEC = "temporary_table_compression_codec";
     public static final String PUSHDOWN_FILTER_ENABLED = "pushdown_filter_enabled";
     public static final String RANGE_FILTERS_ON_SUBSCRIPTS_ENABLED = "range_filters_on_subscripts_enabled";
+    public static final String ADAPTIVE_FILTER_REORDERING_ENABLED = "adaptive_filter_reordering_enabled";
     public static final String VIRTUAL_BUCKET_COUNT = "virtual_bucket_count";
     public static final String MAX_BUCKETS_FOR_GROUPED_EXECUTION = "max_buckets_for_grouped_execution";
     public static final String OFFLINE_DATA_DEBUG_MODE_ENABLED = "offline_data_debug_mode_enabled";
@@ -127,17 +131,21 @@ public final class HiveSessionProperties
                         "Enable bucket-aware execution: only use a single worker per bucket",
                         hiveClientConfig.isBucketExecutionEnabled(),
                         false),
-                booleanProperty(
-                        FORCE_LOCAL_SCHEDULING,
-                        "Only schedule splits on workers colocated with data node",
-                        hiveClientConfig.isForceLocalScheduling(),
-                        false),
+                new PropertyMetadata<>(
+                        NODE_SELECTION_STRATEGY,
+                        "Node affinity selection strategy",
+                        VARCHAR,
+                        NodeSelectionStrategy.class,
+                        hiveClientConfig.getNodeSelectionStrategy(),
+                        false,
+                        value -> NodeSelectionStrategy.valueOf((String) value),
+                        NodeSelectionStrategy::toString),
                 new PropertyMetadata<>(
                         INSERT_EXISTING_PARTITIONS_BEHAVIOR,
                         "Behavior on insert existing partitions; this session property doesn't control behavior on insert existing unpartitioned table",
                         VARCHAR,
                         InsertExistingPartitionsBehavior.class,
-                        hiveClientConfig.isImmutablePartitions() ? ERROR : APPEND,
+                        getDefaultInsertExistingPartitionsBehavior(hiveClientConfig),
                         false,
                         value -> InsertExistingPartitionsBehavior.valueOf((String) value, hiveClientConfig.isImmutablePartitions()),
                         InsertExistingPartitionsBehavior::toString),
@@ -385,6 +393,11 @@ public final class HiveSessionProperties
                         "Experimental: enable pushdown of range filters on subscripts (a[2] = 5) into ORC column readers",
                         hiveClientConfig.isRangeFiltersOnSubscriptsEnabled(),
                         false),
+                booleanProperty(
+                        ADAPTIVE_FILTER_REORDERING_ENABLED,
+                        "Experimental: enable adaptive filter reordering",
+                        hiveClientConfig.isAdaptiveFilterReorderingEnabled(),
+                        false),
                 integerProperty(
                         VIRTUAL_BUCKET_COUNT,
                         "Number of virtual bucket assigned for unbucketed tables",
@@ -404,7 +417,12 @@ public final class HiveSessionProperties
                         ORC_ZSTD_JNI_DECOMPRESSION_ENABLED,
                         "use JNI based zstd decompression for reading ORC files",
                         hiveClientConfig.isZstdJniDecompressionEnabled(),
-                        true));
+                        true),
+                booleanProperty(
+                        SHUFFLE_PARTITIONED_COLUMNS_FOR_TABLE_WRITE,
+                        "Shuffle the data on partitioned columns",
+                        false,
+                        false));
     }
 
     public List<PropertyMetadata<?>> getSessionProperties()
@@ -427,9 +445,9 @@ public final class HiveSessionProperties
         return session.getProperty(MAX_BUCKETS_FOR_GROUPED_EXECUTION, Integer.class);
     }
 
-    public static boolean isForceLocalScheduling(ConnectorSession session)
+    public static NodeSelectionStrategy getNodeSelectionStrategy(ConnectorSession session)
     {
-        return session.getProperty(FORCE_LOCAL_SCHEDULING, Boolean.class);
+        return session.getProperty(NODE_SELECTION_STRATEGY, NodeSelectionStrategy.class);
     }
 
     public static InsertExistingPartitionsBehavior getInsertExistingPartitionsBehavior(ConnectorSession session)
@@ -674,6 +692,11 @@ public final class HiveSessionProperties
         return session.getProperty(RANGE_FILTERS_ON_SUBSCRIPTS_ENABLED, Boolean.class);
     }
 
+    public static boolean isAdaptiveFilterReorderingEnabled(ConnectorSession session)
+    {
+        return session.getProperty(ADAPTIVE_FILTER_REORDERING_ENABLED, Boolean.class);
+    }
+
     public static int getVirtualBucketCount(ConnectorSession session)
     {
         int virtualBucketCount = session.getProperty(VIRTUAL_BUCKET_COUNT, Integer.class);
@@ -688,6 +711,11 @@ public final class HiveSessionProperties
         return session.getProperty(OFFLINE_DATA_DEBUG_MODE_ENABLED, Boolean.class);
     }
 
+    public static boolean isShufflePartitionedColumnsForTableWriteEnabled(ConnectorSession session)
+    {
+        return session.getProperty(SHUFFLE_PARTITIONED_COLUMNS_FOR_TABLE_WRITE, Boolean.class);
+    }
+
     public static PropertyMetadata<DataSize> dataSizeSessionProperty(String name, String description, DataSize defaultValue, boolean hidden)
     {
         return new PropertyMetadata<>(
@@ -699,5 +727,14 @@ public final class HiveSessionProperties
                 hidden,
                 value -> DataSize.valueOf((String) value),
                 DataSize::toString);
+    }
+
+    private static InsertExistingPartitionsBehavior getDefaultInsertExistingPartitionsBehavior(HiveClientConfig hiveClientConfig)
+    {
+        if (!hiveClientConfig.isImmutablePartitions()) {
+            return APPEND;
+        }
+
+        return hiveClientConfig.isInsertOverwriteImmutablePartitionEnabled() ? OVERWRITE : ERROR;
     }
 }

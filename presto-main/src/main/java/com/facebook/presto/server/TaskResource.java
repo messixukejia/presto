@@ -14,6 +14,7 @@
 package com.facebook.presto.server;
 
 import com.facebook.airlift.concurrent.BoundedExecutor;
+import com.facebook.airlift.json.JsonCodec;
 import com.facebook.airlift.stats.TimeStat;
 import com.facebook.presto.Session;
 import com.facebook.presto.execution.TaskId;
@@ -25,7 +26,10 @@ import com.facebook.presto.execution.buffer.BufferResult;
 import com.facebook.presto.execution.buffer.OutputBuffers.OutputBufferId;
 import com.facebook.presto.execution.buffer.SerializedPage;
 import com.facebook.presto.metadata.SessionPropertyManager;
+import com.facebook.presto.server.smile.Codec;
+import com.facebook.presto.server.smile.SmileCodec;
 import com.facebook.presto.spi.Page;
+import com.facebook.presto.sql.planner.PlanFragment;
 import com.google.common.collect.ImmutableList;
 import com.google.common.reflect.TypeToken;
 import com.google.common.util.concurrent.Futures;
@@ -58,7 +62,6 @@ import javax.ws.rs.core.UriInfo;
 import java.util.List;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ThreadLocalRandom;
 
 import static com.facebook.airlift.concurrent.MoreFutures.addTimeout;
 import static com.facebook.airlift.http.server.AsyncResponseHandler.bindAsyncResponse;
@@ -71,6 +74,9 @@ import static com.facebook.presto.client.PrestoHeaders.PRESTO_MAX_WAIT;
 import static com.facebook.presto.client.PrestoHeaders.PRESTO_PAGE_NEXT_TOKEN;
 import static com.facebook.presto.client.PrestoHeaders.PRESTO_PAGE_TOKEN;
 import static com.facebook.presto.client.PrestoHeaders.PRESTO_TASK_INSTANCE_ID;
+import static com.facebook.presto.server.smile.JsonCodecWrapper.wrapJsonCodec;
+import static com.facebook.presto.util.TaskUtils.DEFAULT_MAX_WAIT_TIME;
+import static com.facebook.presto.util.TaskUtils.randomizeWaitTime;
 import static com.google.common.collect.Iterables.transform;
 import static com.google.common.util.concurrent.MoreExecutors.directExecutor;
 import static java.util.Objects.requireNonNull;
@@ -86,7 +92,6 @@ import static javax.ws.rs.core.MediaType.APPLICATION_JSON;
 public class TaskResource
 {
     private static final Duration ADDITIONAL_WAIT_TIME = new Duration(5, SECONDS);
-    private static final Duration DEFAULT_MAX_WAIT_TIME = new Duration(2, SECONDS);
 
     private final TaskManager taskManager;
     private final SessionPropertyManager sessionPropertyManager;
@@ -94,18 +99,28 @@ public class TaskResource
     private final ScheduledExecutorService timeoutExecutor;
     private final TimeStat readFromOutputBufferTime = new TimeStat();
     private final TimeStat resultsRequestTime = new TimeStat();
+    private final Codec<PlanFragment> planFragmentCodec;
 
     @Inject
     public TaskResource(
             TaskManager taskManager,
             SessionPropertyManager sessionPropertyManager,
-            @ForAsyncHttp BoundedExecutor responseExecutor,
-            @ForAsyncHttp ScheduledExecutorService timeoutExecutor)
+            @ForAsyncRpc BoundedExecutor responseExecutor,
+            @ForAsyncRpc ScheduledExecutorService timeoutExecutor,
+            JsonCodec<PlanFragment> planFragmentJsonCodec,
+            SmileCodec<PlanFragment> planFragmentSmileCodec,
+            InternalCommunicationConfig communicationConfig)
     {
         this.taskManager = requireNonNull(taskManager, "taskManager is null");
         this.sessionPropertyManager = requireNonNull(sessionPropertyManager, "sessionPropertyManager is null");
         this.responseExecutor = requireNonNull(responseExecutor, "responseExecutor is null");
         this.timeoutExecutor = requireNonNull(timeoutExecutor, "timeoutExecutor is null");
+        if (communicationConfig.isBinaryTransportEnabled()) {
+            this.planFragmentCodec = planFragmentSmileCodec;
+        }
+        else {
+            this.planFragmentCodec = wrapJsonCodec(planFragmentJsonCodec);
+        }
     }
 
     @GET
@@ -132,10 +147,9 @@ public class TaskResource
         Session session = taskUpdateRequest.getSession().toSession(sessionPropertyManager, taskUpdateRequest.getExtraCredentials());
         TaskInfo taskInfo = taskManager.updateTask(session,
                 taskId,
-                taskUpdateRequest.getFragment(),
+                taskUpdateRequest.getFragment().map(planFragmentCodec::fromBytes),
                 taskUpdateRequest.getSources(),
                 taskUpdateRequest.getOutputIds(),
-                taskUpdateRequest.getTotalPartitions(),
                 taskUpdateRequest.getTableWriteInfo());
 
         if (shouldSummarize(uriInfo)) {
@@ -356,12 +370,5 @@ public class TaskResource
     private static boolean shouldSummarize(UriInfo uriInfo)
     {
         return uriInfo.getQueryParameters().containsKey("summarize");
-    }
-
-    private static Duration randomizeWaitTime(Duration waitTime)
-    {
-        // Randomize in [T/2, T], so wait is not near zero and the client-supplied max wait time is respected
-        long halfWaitMillis = waitTime.toMillis() / 2;
-        return new Duration(halfWaitMillis + ThreadLocalRandom.current().nextLong(halfWaitMillis), MILLISECONDS);
     }
 }

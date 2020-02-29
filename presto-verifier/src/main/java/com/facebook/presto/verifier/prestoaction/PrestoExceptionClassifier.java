@@ -15,7 +15,6 @@ package com.facebook.presto.verifier.prestoaction;
 
 import com.facebook.presto.connector.thrift.ThriftErrorCode;
 import com.facebook.presto.hive.HiveErrorCode;
-import com.facebook.presto.hive.MetastoreErrorCode;
 import com.facebook.presto.jdbc.QueryStats;
 import com.facebook.presto.plugin.jdbc.JdbcErrorCode;
 import com.facebook.presto.spi.ErrorCodeSupplier;
@@ -23,6 +22,7 @@ import com.facebook.presto.spi.StandardErrorCode;
 import com.facebook.presto.verifier.framework.QueryException;
 import com.facebook.presto.verifier.framework.QueryStage;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Sets;
 
 import java.io.EOFException;
 import java.io.UncheckedIOException;
@@ -37,15 +37,15 @@ import java.util.concurrent.TimeoutException;
 import static com.facebook.presto.connector.thrift.ThriftErrorCode.THRIFT_SERVICE_CONNECTION_ERROR;
 import static com.facebook.presto.hive.HiveErrorCode.HIVE_CANNOT_OPEN_SPLIT;
 import static com.facebook.presto.hive.HiveErrorCode.HIVE_CURSOR_ERROR;
+import static com.facebook.presto.hive.HiveErrorCode.HIVE_FILESYSTEM_ERROR;
 import static com.facebook.presto.hive.HiveErrorCode.HIVE_FILE_NOT_FOUND;
+import static com.facebook.presto.hive.HiveErrorCode.HIVE_METASTORE_ERROR;
+import static com.facebook.presto.hive.HiveErrorCode.HIVE_PARTITION_DROPPED_DURING_QUERY;
+import static com.facebook.presto.hive.HiveErrorCode.HIVE_TABLE_DROPPED_DURING_QUERY;
 import static com.facebook.presto.hive.HiveErrorCode.HIVE_TOO_MANY_OPEN_PARTITIONS;
 import static com.facebook.presto.hive.HiveErrorCode.HIVE_WRITER_CLOSE_ERROR;
 import static com.facebook.presto.hive.HiveErrorCode.HIVE_WRITER_DATA_ERROR;
 import static com.facebook.presto.hive.HiveErrorCode.HIVE_WRITER_OPEN_ERROR;
-import static com.facebook.presto.hive.MetastoreErrorCode.HIVE_FILESYSTEM_ERROR;
-import static com.facebook.presto.hive.MetastoreErrorCode.HIVE_METASTORE_ERROR;
-import static com.facebook.presto.hive.MetastoreErrorCode.HIVE_PARTITION_DROPPED_DURING_QUERY;
-import static com.facebook.presto.hive.MetastoreErrorCode.HIVE_TABLE_DROPPED_DURING_QUERY;
 import static com.facebook.presto.plugin.jdbc.JdbcErrorCode.JDBC_ERROR;
 import static com.facebook.presto.spi.StandardErrorCode.ABANDONED_TASK;
 import static com.facebook.presto.spi.StandardErrorCode.NO_NODES_AVAILABLE;
@@ -57,21 +57,21 @@ import static com.facebook.presto.spi.StandardErrorCode.SERVER_SHUTTING_DOWN;
 import static com.facebook.presto.spi.StandardErrorCode.SERVER_STARTING_UP;
 import static com.facebook.presto.spi.StandardErrorCode.TOO_MANY_REQUESTS_FAILED;
 import static com.google.common.base.Functions.identity;
+import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.collect.ImmutableMap.toImmutableMap;
 import static java.util.Arrays.asList;
 
 public class PrestoExceptionClassifier
         implements SqlExceptionClassifier
 {
-    private static final Set<ErrorCodeSupplier> DEFAULT_ERRORS = ImmutableSet.<ErrorCodeSupplier>builder()
+    public static final Set<ErrorCodeSupplier> DEFAULT_ERRORS = ImmutableSet.<ErrorCodeSupplier>builder()
             .addAll(asList(StandardErrorCode.values()))
-            .addAll(asList(MetastoreErrorCode.values()))
             .addAll(asList(HiveErrorCode.values()))
             .addAll(asList(JdbcErrorCode.values()))
             .addAll(asList(ThriftErrorCode.values()))
             .build();
 
-    private static final Set<ErrorCodeSupplier> DEFAULT_RETRYABLE_ERRORS = ImmutableSet.of(
+    public static final Set<ErrorCodeSupplier> DEFAULT_RETRYABLE_ERRORS = ImmutableSet.of(
             // From StandardErrorCode
             NO_NODES_AVAILABLE,
             REMOTE_TASK_ERROR,
@@ -104,20 +104,23 @@ public class PrestoExceptionClassifier
     private final Map<Integer, ErrorCodeSupplier> errorByCode;
     private final Set<ErrorCodeSupplier> retryableErrors;
 
-    public PrestoExceptionClassifier(
-            Set<ErrorCodeSupplier> additionalErrors,
-            Set<ErrorCodeSupplier> additionalRetryableErrors)
+    private PrestoExceptionClassifier(Set<ErrorCodeSupplier> recognizedErrors, Set<ErrorCodeSupplier> retryableErrors)
     {
-        this.errorByCode = ImmutableSet.<ErrorCodeSupplier>builder()
-                .addAll(DEFAULT_ERRORS)
-                .addAll(additionalErrors)
-                .build()
-                .stream()
+        this.errorByCode = recognizedErrors.stream()
                 .collect(toImmutableMap(errorCode -> errorCode.toErrorCode().getCode(), identity()));
-        this.retryableErrors = ImmutableSet.<ErrorCodeSupplier>builder()
-                .addAll(DEFAULT_RETRYABLE_ERRORS)
-                .addAll(additionalRetryableErrors)
-                .build();
+        this.retryableErrors = ImmutableSet.copyOf(retryableErrors);
+    }
+
+    public static PrestoExceptionClassifier createDefault()
+    {
+        return create(DEFAULT_ERRORS, DEFAULT_RETRYABLE_ERRORS);
+    }
+
+    public static PrestoExceptionClassifier create(Set<ErrorCodeSupplier> recognizedErrors, Set<ErrorCodeSupplier> retryableErrors)
+    {
+        Set<ErrorCodeSupplier> unrecognized = Sets.difference(retryableErrors, recognizedErrors);
+        checkArgument(unrecognized.isEmpty(), "Retryable errors not recognized: %s", unrecognized);
+        return new PrestoExceptionClassifier(recognizedErrors, retryableErrors);
     }
 
     public QueryException createException(QueryStage queryStage, Optional<QueryStats> queryStats, SQLException cause)
