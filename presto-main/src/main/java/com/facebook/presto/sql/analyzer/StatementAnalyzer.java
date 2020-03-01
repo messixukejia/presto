@@ -720,7 +720,6 @@ class StatementAnalyzer
         @Override
         protected Scope visitCommit(Commit node, Optional<Scope> scope)
         {
-
             System.out.println("visitCommit: " + node.toString());
             return createAndAssignScope(node, scope);
         }
